@@ -69,7 +69,7 @@ enum PipChecks {
             let result = try await CommandRunner().run(executable: URL(fileURLWithPath: "/usr/bin/env"), arguments: ["PIP_CONFIG_FILE=" + file.path, "PIP_TARGET=/other", "PIP_PYTHON=/different/python", "PIP_REQUIREMENT=/another.txt", testPythonPath, "-c", PipManager.configurationGuardScript])
             let text = try result.requireSuccess()
             let keys = try JSONSerialization.jsonObject(with: Data(text.utf8)) as! [String]
-            try expect(keys.contains("global.python") && keys.contains("uninstall.requirement") && keys.contains(":env:.target"))
+            try expect(keys.contains("global.python") && keys.contains("uninstall.requirement") && keys.contains(":env:.target"), "Blocked option keys: " + keys.joined(separator: ", "))
             try expect(keys.contains(":env:.python") && keys.contains(":env:.requirement"))
             try expect(!text.contains("secret") && !text.contains("example.invalid"))
         },

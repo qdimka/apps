@@ -45,6 +45,7 @@ jobs:
         run: |
           swift --version
           xcodebuild -version
+          python -m pip --version
           test "$(uname -m)" = "$EXPECTED_ARCH"
         env:
           EXPECTED_ARCH: ${{ matrix.arch }}
