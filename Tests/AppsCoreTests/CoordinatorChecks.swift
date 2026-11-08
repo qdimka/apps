@@ -12,6 +12,7 @@ actor FakeManager: PackageManager {
     let keepOnUninstall: Bool
     var failChecks = false
     var failAfterMutation = false
+    var exposeUnderlyingCopy = false
     var lists = 0, mutations = 0
     init(source: PackageSource, failList: Bool = false, mutationExit: Int32 = 0, delay: Duration = .zero, keepOnUninstall: Bool = false, runtimeSuffix: String = "") {
         self.source = source; executable = URL(fileURLWithPath: "/tools/" + runtimeSuffix + source.executableName)
@@ -32,6 +33,7 @@ actor FakeManager: PackageManager {
     func setCheckFailure() { failChecks = true }
     func setRefreshFailure() { failAfterMutation = true }
     func setRestrictions() { rows[0].upgradeRestriction = "Another manager owns this package"; rows[0].removalRestriction = "Another manager owns this package" }
+    func setUnderlyingCopyScenario() { rows[0].installationPath = "/user/site-packages"; rows[0].isUserInstall = true; exposeUnderlyingCopy = true }
     func upgrade(_ package: PackageRecord) async throws -> CommandResult {
         mutations += 1
         try await Task.sleep(for: delay)
@@ -40,7 +42,8 @@ actor FakeManager: PackageManager {
     }
     func uninstall(_ package: PackageRecord) async throws -> CommandResult {
         mutations += 1
-        if mutationExit == 0 && !keepOnUninstall { rows = [] }
+        if mutationExit == 0 && exposeUnderlyingCopy { rows[0].installationPath = "/base/site-packages"; rows[0].isUserInstall = false }
+        else if mutationExit == 0 && !keepOnUninstall { rows = [] }
         return .init(exitCode: mutationExit, stdout: "uninstall output")
     }
     func counts() -> (lists: Int, mutations: Int) { (lists, mutations) }
@@ -48,6 +51,18 @@ actor FakeManager: PackageManager {
 
 enum CoordinatorChecks {
     static let all: [Check] = [
+        Check(name: "Deleting a user copy succeeds even when an underlying copy becomes visible") {
+            let manager = FakeManager(source: .pip)
+            await manager.setUnderlyingCopyScenario()
+            let store = await PackageCoordinator(managers: [manager])
+            await store.reload()
+            let id = await store.packages[0].id
+            await store.mutate(id, action: .uninstall)
+            let notice = await store.notice, rows = await store.packages
+            try expectEqual(notice?.isError, false)
+            try expectEqual(rows.count, 1)
+            try expectEqual(rows[0].installationPath, "/base/site-packages")
+        },
         Check(name: "Runtime switch replaces only its own source and invalidates old identities") {
             let brew = FakeManager(source: .homebrew), old = FakeManager(source: .pip)
             let store = await PackageCoordinator(managers: [brew, old])

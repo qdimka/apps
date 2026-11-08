@@ -24,9 +24,14 @@ public protocol PackageManager: Sendable {
 
 extension PackageManager {
     func validate(_ package: PackageRecord) throws {
-        let pattern = source == .npm ? #"^(?:@[A-Za-z0-9_][A-Za-z0-9._-]*/)?[A-Za-z0-9_][A-Za-z0-9._-]*$"# : #"^[A-Za-z0-9][A-Za-z0-9._+@/-]*$"#
+        let pattern: String
+        switch source {
+        case .npm: pattern = #"^(?:@[A-Za-z0-9_][A-Za-z0-9._-]*/)?[A-Za-z0-9_][A-Za-z0-9._-]*$"#
+        case .pip: pattern = #"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$"#
+        default: pattern = #"^[A-Za-z0-9][A-Za-z0-9._+@/-]*$"#
+        }
         guard package.source == source, package.managerPath == executable.path,
-              package.name.range(of: pattern, options: .regularExpression) != nil,
+              package.name.range(of: pattern, options: .regularExpression) == package.name.startIndex..<package.name.endIndex,
               !package.name.split(separator: "/").contains("..") else { throw ManagerError.invalidTarget }
     }
     func output(_ arguments: [String]) async throws -> String {

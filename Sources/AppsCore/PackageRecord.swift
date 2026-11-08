@@ -55,17 +55,19 @@ public struct PackageRecord: Identifiable, Hashable, Sendable, Codable {
     public var upgradeRestriction: String?
     public var removalRestriction: String?
     public var isUserInstall: Bool
+    public var installationKey: String?
 
     public init(name: String, source: PackageSource, managerPath: String, version: String,
                 kind: PackageKind = .tool, summary: String = "", installationPath: String? = nil,
                 executables: [String] = [], dependencies: [String] = [], latestVersion: String? = nil,
                 updateStatus: UpdateStatus = .notChecked, pinned: Bool = false, homepage: String? = nil,
-                environmentPath: String? = nil, upgradeRestriction: String? = nil, removalRestriction: String? = nil, isUserInstall: Bool = false) {
+                environmentPath: String? = nil, upgradeRestriction: String? = nil, removalRestriction: String? = nil, isUserInstall: Bool = false, installationKey: String? = nil) {
         self.name = name; self.source = source; self.managerPath = managerPath; self.version = version
         self.kind = kind; self.summary = summary; self.installationPath = installationPath
         self.executables = executables; self.dependencies = dependencies; self.latestVersion = latestVersion
         self.updateStatus = updateStatus; self.pinned = pinned; self.homepage = homepage
         self.environmentPath = environmentPath; self.upgradeRestriction = upgradeRestriction; self.removalRestriction = removalRestriction
         self.isUserInstall = isUserInstall
+        self.installationKey = installationKey
     }
 }

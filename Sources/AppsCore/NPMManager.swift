@@ -30,8 +30,10 @@ public struct NPMManager: PackageManager {
             var row = row
             if row.upgradeRestriction != nil { row.updateStatus = .unsupported }
             else if let latest = (outdated[row.name] as? [String: Any])?["latest"] as? String {
-                row.latestVersion = latest
-                row.updateStatus = latest == row.version ? .current : .available
+                if let installed = SemanticVersion(row.version), let candidate = SemanticVersion(latest) {
+                    row.latestVersion = candidate > installed ? latest : nil
+                    row.updateStatus = candidate > installed ? .available : .current
+                } else { row.updateStatus = .unsupported }
             } else { row.updateStatus = .current }
             return row
         }
@@ -46,8 +48,18 @@ public struct NPMManager: PackageManager {
               fresh.version == package.version, fresh.environmentPath == package.environmentPath,
               let prefix = fresh.environmentPath else { throw ManagerError.contextChanged }
         if let reason = action == .upgrade ? fresh.upgradeRestriction : fresh.removalRestriction { throw ManagerError.operationRestricted(reason) }
+        var target: String?
+        if action == .upgrade {
+            let json = try await output(["view", "--prefix", prefix, "--json", "--", fresh.name, "version"])
+            guard let latest = try? JSONSerialization.jsonObject(with: Data(json.utf8), options: .fragmentsAllowed) as? String,
+                  let candidate = SemanticVersion(latest), let installed = SemanticVersion(fresh.version) else {
+                throw ManagerError.invalidData("npm version")
+            }
+            guard candidate > installed else { return .init(exitCode: 0, stdout: "Более новая версия не найдена. Установленная версия сохранена.") }
+            target = latest
+        }
         let arguments = action == .upgrade
-            ? ["install", "--global", "--prefix", prefix, "--no-audit", "--no-fund", "--", fresh.name + "@latest"]
+            ? ["install", "--global", "--prefix", prefix, "--no-audit", "--no-fund", "--", fresh.name + "@" + target!]
             : ["uninstall", "--global", "--prefix", prefix, "--no-audit", "--no-fund", "--", fresh.name]
         return try await runner.run(executable: executable, arguments: arguments)
     }
@@ -62,11 +74,21 @@ public struct NPMManager: PackageManager {
         return try dependencies.keys.sorted().map { name in
             guard let item = dependencies[name] as? [String: Any], let version = item["version"] as? String, !version.isEmpty else { throw ManagerError.invalidData("npm") }
             let linked = item["link"] as? Bool == true || (item["resolved"] as? String)?.hasPrefix("file:") == true
+            let alias = (item["name"] as? String).map { $0.lowercased() != name.lowercased() } ?? false
+            let origins = ["resolved", "from", "_from"].compactMap { item[$0] as? String }
+            let nonRegistry = origins.contains { value in
+                value.hasPrefix("git@") || value.contains("@git@") ||
+                ["git+", "git://", "ssh://", "github:", "gitlab:", "bitbucket:", "file:", "npm:"].contains { value.contains($0) }
+            }
+            let restriction: String?
+            if linked { restriction = "Локальная npm-ссылка: обновите исходный проект." }
+            else if alias || nonRegistry { restriction = "Пакет установлен как alias или из другого источника. Обновите исходную установку." }
+            else { restriction = nil }
             return PackageRecord(name: name, source: .npm, managerPath: executable.path, version: version, kind: .npmPackage,
                 summary: item["description"] as? String ?? "Глобальный пакет npm",
                 installationPath: item["path"] as? String ?? root + "/" + name,
                 homepage: item["homepage"] as? String, environmentPath: prefix,
-                upgradeRestriction: linked ? "Локальная npm-ссылка: обновите исходный проект." : nil,
+                upgradeRestriction: restriction,
                 removalRestriction: name == "npm" ? "Удаление npm отключено, чтобы сохранить управление этим источником." : nil)
         }
     }

@@ -4,7 +4,10 @@ public struct PipManager: PackageManager {
     public let source = PackageSource.pip
     public let executable: URL
     public let runner: any CommandRunning
-    public init(executable: URL, runner: any CommandRunning = CommandRunner()) { self.executable = executable; self.runner = runner }
+    public let checkTimeout: Duration
+    public init(executable: URL, runner: any CommandRunning = CommandRunner(), checkTimeout: Duration = .seconds(60)) {
+        self.executable = executable; self.runner = runner; self.checkTimeout = checkTimeout
+    }
 
     public func list() async throws -> [PackageRecord] {
         try Self.parseProbe(await output(["-c", Self.probeScript]), executable: executable)
@@ -15,9 +18,16 @@ public struct PipManager: PackageManager {
         guard rows.contains(where: { $0.upgradeRestriction == nil }) else {
             return rows.map { var row = $0; row.updateStatus = .unsupported; return row }
         }
+        try await validateConfiguration()
         var arguments = ["-m", "pip", "--disable-pip-version-check", "--no-input", "--timeout", "8", "--retries", "0", "list", "--outdated", "--format=json"]
         for row in rows where row.upgradeRestriction != nil { arguments += ["--exclude", row.name] }
-        let result = try await runner.run(executable: executable, arguments: arguments)
+        let checkArguments = arguments
+        let result = try await withThrowingTaskGroup(of: CommandResult.self) { group in
+            group.addTask { try await runner.run(executable: executable, arguments: checkArguments) }
+            group.addTask { try await Task.sleep(for: checkTimeout); throw CommandError.timedOut }
+            defer { group.cancelAll() }
+            return try await group.next()!
+        }
         let text = try result.requireSuccess()
         guard result.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ManagerError.operationRestricted("Проверка индекса pip завершилась с предупреждением.\n" + result.stderr.suffix(3500))
@@ -33,7 +43,7 @@ public struct PipManager: PackageManager {
             if row.upgradeRestriction != nil { row.updateStatus = .unsupported }
             else if let version = latest[Self.normalized(row.name)] {
                 row.latestVersion = version; row.updateStatus = version == row.version ? .current : .available
-            } else { row.updateStatus = .current }
+            } else { row.updateStatus = .unsupported }
             return row
         }
     }
@@ -42,16 +52,47 @@ public struct PipManager: PackageManager {
     public func uninstall(_ package: PackageRecord) async throws -> CommandResult { try await mutate(package, action: .uninstall) }
     private func mutate(_ package: PackageRecord, action: PackageAction) async throws -> CommandResult {
         try validate(package)
-        guard let fresh = try await list().first(where: { $0.id == package.id }),
+        let rows = try await list()
+        guard let fresh = rows.first(where: { $0.id == package.id }),
               fresh.version == package.version, fresh.environmentPath == package.environmentPath,
-              fresh.installationPath == package.installationPath, fresh.isUserInstall == package.isUserInstall else { throw ManagerError.contextChanged }
+              fresh.installationPath == package.installationPath, fresh.isUserInstall == package.isUserInstall,
+              fresh.installationKey == package.installationKey else { throw ManagerError.contextChanged }
         if let reason = action == .upgrade ? fresh.upgradeRestriction : fresh.removalRestriction { throw ManagerError.operationRestricted(reason) }
+        try await validateConfiguration()
+        var constraintDirectory: URL?
+        defer { if let constraintDirectory { try? FileManager.default.removeItem(at: constraintDirectory) } }
         var arguments = ["-m", "pip", "--disable-pip-version-check"]
         if action == .upgrade {
             arguments += ["install", "--upgrade"]
             if fresh.isUserInstall { arguments.append("--user") }
+            let protected = rows.filter { $0.id != fresh.id && $0.upgradeRestriction != nil }
+            if !protected.isEmpty {
+                var lines: [String] = []
+                for row in protected {
+                    guard row.name.range(of: #"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$"#, options: .regularExpression) != nil,
+                          row.version.range(of: #"^[A-Za-z0-9.!+_-]+$"#, options: .regularExpression) != nil else {
+                        throw ManagerError.operationRestricted("Не удалось закрепить версии защищённых зависимостей. Обновите пакет в исходном менеджере.")
+                    }
+                    lines.append(Self.normalized(row.name) + "===" + row.version)
+                }
+                let directory = FileManager.default.temporaryDirectory.appendingPathComponent("apps-pip-" + UUID().uuidString)
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+                constraintDirectory = directory
+                let file = directory.appendingPathComponent("constraints.txt")
+                try Data((lines.sorted().joined(separator: "\n") + "\n").utf8).write(to: file)
+                try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+                arguments += ["--constraint", file.path]
+            }
         } else { arguments += ["uninstall", "--yes"] }
-        return try await runner.run(executable: executable, arguments: arguments + ["--", fresh.name])
+        return try await runner.run(executable: executable, arguments: arguments + ["--", Self.normalized(fresh.name)])
+    }
+
+    private func validateConfiguration() async throws {
+        let text = try await output(["-c", Self.configurationGuardScript])
+        guard let keys = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String] else { throw ManagerError.invalidData("pip configuration") }
+        if !keys.isEmpty {
+            throw ManagerError.operationRestricted("Настройки pip меняют цель или область операции: " + keys.joined(separator: ", ") + ". Используйте исходную настройку в Terminal или уберите эти параметры.")
+        }
     }
 
     public static func normalized(_ name: String) -> String {
@@ -90,10 +131,34 @@ public struct PipManager: PackageManager {
                 executables: item["commands"] as? [String] ?? [], dependencies: item["dependencies"] as? [String] ?? [],
                 homepage: item["homepage"] as? String, environmentPath: prefix,
                 upgradeRestriction: restriction ?? (direct ? "Пакет установлен из URL или локального проекта. Обновите исходную установку." : nil),
-                removalRestriction: restriction ?? (normalized(name) == "pip" ? "Удаление pip отключено, чтобы сохранить управление окружением." : nil), isUserInstall: user))
+                removalRestriction: restriction ?? (normalized(name) == "pip" ? "Удаление pip отключено, чтобы сохранить управление окружением." : nil), isUserInstall: user,
+                installationKey: item["metadataLocation"] as? String ?? "\(location)|\(normalized(name))|\(version)|\(user)"))
         }
         return rows
     }
+
+    // Read effective option names only: never return registry URLs or credentials.
+    // Reject settings that redirect to another interpreter/location or add targets.
+    public static let configurationGuardScript = #"""
+import json
+from pip._internal.configuration import Configuration
+config = Configuration(isolated=False)
+config.load()
+dangerous = {'python', 'requirement', 'editable', 'target', 'prefix', 'root', 'user',
+             'force-reinstall', 'ignore-installed', 'no-deps', 'constraint', 'build-constraint',
+             'global-option', 'install-option', 'break-system-packages'}
+booleans = {'user', 'force-reinstall', 'ignore-installed', 'no-deps', 'break-system-packages'}
+blocked = []
+for key, value in config.items():
+    option = key.split('.')[-1]
+    if option == 'upgrade-strategy' and str(value).strip() != 'only-if-needed':
+        blocked.append(key)
+    elif option in dangerous and str(value).strip():
+        if option in booleans and str(value).lower() in ('0', 'false', 'no', 'off'):
+            continue
+        blocked.append(key)
+print(json.dumps(sorted(set(blocked))))
+"""#
 
     private static func within(_ path: String, _ root: String) -> Bool {
         let path = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardized.path
@@ -129,7 +194,8 @@ for dist in md.distributions():
         location = os.path.abspath(str(dist.locate_file('')))
         rows.append(dict(name=name, version=dist.version,
             summary=dist.metadata.get('Summary', ''), homepage=dist.metadata.get('Home-page', ''),
-            location=location, installer=(dist.read_text('INSTALLER') or '').strip().lower(),
+            location=location, metadataLocation=os.path.abspath(str(getattr(dist, '_path', location))),
+            installer=(dist.read_text('INSTALLER') or '').strip().lower(),
             commands=[entry.name for entry in dist.entry_points if entry.group == 'console_scripts'],
             dependencies=dist.requires or [], directURL=bool(dist.read_text('direct_url.json')),
             isUser=inside(location, user_site)))

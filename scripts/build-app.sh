@@ -10,7 +10,11 @@ scripts/swift-local.sh build -c "$configuration" --product apps
 binary_dir="$(scripts/swift-local.sh build -c "$configuration" --show-bin-path)"
 app="$PWD/dist/apps.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" .build/icon
-cp "$binary_dir/apps" "$app/Contents/MacOS/apps"
+binary_tmp="$(mktemp "$app/Contents/MacOS/.apps.XXXXXX")"
+trap 'rm -f "$binary_tmp"' EXIT
+cp "$binary_dir/apps" "$binary_tmp"
+chmod 755 "$binary_tmp"
+mv -f "$binary_tmp" "$app/Contents/MacOS/apps"
 cp Resources/Info.plist "$app/Contents/Info.plist"
 
 icon_flags=(-module-cache-path "$PWD/.build/module-cache")

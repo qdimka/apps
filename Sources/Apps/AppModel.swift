@@ -83,7 +83,8 @@ final class AppModel {
     func checkUpdates() async { await coordinator.checkUpdates(); reconcileSelection() }
     func mutate(_ id: PackageRecord.ID, action: PackageAction) async {
         await coordinator.mutate(id, action: action)
-        reconcileSelection()
+        if action == .uninstall && coordinator.notice?.isError == false { selection = nil }
+        else { reconcileSelection() }
     }
     func reconcileSelection() {
         if !visiblePackages.contains(where: { $0.id == selection }) { selection = nil }

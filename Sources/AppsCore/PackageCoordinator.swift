@@ -75,7 +75,7 @@ public final class PackageCoordinator {
         if check {
             let failed = sourceStates.filter { $0.value.phase == .failed }.map { $0.key.title }.sorted()
             notice = failed.isEmpty
-                ? .init(message: "Проверка завершена. npm/pip используют настроенные реестры; Homebrew — локальный каталог. Новые версии uv/pipx не проверяются.", isError: false)
+                ? .init(message: "Найденные обновления отмечены. Для непроверенных версий актуальность не подтверждена; Homebrew использует локальный каталог.", isError: false)
                 : .init(message: "Не удалось проверить: \(failed.joined(separator: ", ")). Их статусы обновлений сброшены.", isError: true)
         }
     }
@@ -139,8 +139,15 @@ public final class PackageCoordinator {
         if commandSucceeded {
             if !refreshed {
                 notice = .init(message: "Команда завершена, но подтвердить результат не удалось. Перечитайте источник.", isError: true)
-            } else if action == .uninstall && packages.contains(where: { $0.id == id }) {
+            } else if action == .uninstall && packages.contains(where: { row in
+                guard row.id == id else { return false }
+                if package.source != .pip { return true }
+                return row.installationPath == package.installationPath && row.isUserInstall == package.isUserInstall &&
+                    row.version == package.version && row.installationKey == package.installationKey
+            }) {
                 notice = .init(message: "\(package.name) остался установленным. Подробности — в журнале.", isError: true)
+            } else if action == .uninstall && package.source == .pip && packages.contains(where: { $0.id == id }) {
+                notice = .init(message: "\(package.name): выбранная установка удалена. Теперь видна другая копия этого пакета.", isError: false)
             } else {
                 notice = .init(message: package.name + (action == .upgrade ? ": команда обновления выполнена" : ": удалён"), isError: false)
             }

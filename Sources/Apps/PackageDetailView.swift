@@ -74,7 +74,8 @@ struct PackageDetailView: View {
             }
         } message: {
             Text("\(package.name) \(package.version)\nИсточник: \(package.source.title)\n" +
-                 (package.environmentPath.map { "Окружение: \($0)\n" } ?? "") + "\n" + removalExplanation)
+                 (package.environmentPath.map { "Окружение: \($0)\n" } ?? "") +
+                 (package.source == .pip ? package.installationPath.map { "Расположение: \($0)\n" } ?? "" : "") + "\n" + removalExplanation)
         }
     }
 
@@ -111,6 +112,9 @@ struct PackageDetailView: View {
                     .font(.caption).foregroundStyle(.secondary)
             } else if package.source == .homebrew && package.updateStatus == .unsupported {
                 Text("Свежесть каталога Homebrew не подтверждена. Отсутствие найденного обновления не означает, что версия последняя.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else if package.source == .pip && package.updateStatus == .unsupported && package.upgradeRestriction == nil {
+                Text("Ответ индекса не подтвердил актуальность этой версии.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             if package.source == .homebrew && package.updateStatus == .available {
