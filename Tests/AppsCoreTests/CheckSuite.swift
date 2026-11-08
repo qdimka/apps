@@ -19,7 +19,18 @@ struct Check {
 
 @main struct CheckSuite {
     static func main() async {
-        let checks = CommandRunnerChecks.all
+        if CommandLine.arguments.contains("--inventory") {
+            var failures = 0
+            for manager in ManagerDiscovery.managers() {
+                do {
+                    let rows = try await manager.list()
+                    print("\(manager.source.title): \(rows.count) packages; \(manager.executable.path)")
+                } catch { failures += 1; print("\(manager.source.title): \(error.localizedDescription)") }
+            }
+            if failures > 0 { exit(1) }
+            return
+        }
+        let checks = CommandRunnerChecks.all + ManagerChecks.all
         var failures = 0
         for check in checks {
             do { try await check.run(); print("PASS \(check.name)") }
