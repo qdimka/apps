@@ -64,11 +64,6 @@ struct ContentView: View {
 
     private var sidebar: some View {
         VStack(spacing: 0) {
-            HStack {
-                WindowControls().frame(width: 70, height: 20)
-                Spacer()
-            }
-            .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 8)
             List(selection: $model.sourceKey) {
                 Section {
                     HStack {
