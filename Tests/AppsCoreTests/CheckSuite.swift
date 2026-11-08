@@ -1,4 +1,5 @@
 import Foundation
+import AppsCore
 
 struct CheckFailure: Error, CustomStringConvertible {
     let description: String
