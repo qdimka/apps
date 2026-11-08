@@ -10,6 +10,8 @@ struct AppsApp: App {
             ContentView(model: model)
                 .frame(minWidth: 1000, minHeight: 640)
         }
+        .windowStyle(.titleBar)
+        .windowToolbarStyle(.unified)
         .defaultSize(width: 1220, height: 780)
         .commands { CommandGroup(replacing: .newItem) {} }
     }
