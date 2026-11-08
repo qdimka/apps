@@ -1,29 +1,41 @@
-# apps: npm и pip
+# apps: npm and pip design
 
-Пользователь запросил продолжение apps с npm и pip и уточнил, что нужны основные установки Python и выбор проектных venv. Сохраняются согласованные SwiftUI, локальная работа, просмотр, проверка обновлений, одиночное обновление/удаление и штатные кнопки окна.
+**Status:** Historical 0.2 design. The single-active-runtime approach below was superseded by
+[environment inventory](2026-11-08-environment-inventory-design.md). Ownership and mutation safeguards remain.
 
-## Подход
+## Intent and approach
 
-Расширяем существующие адаптеры двумя источниками и выбором активного runtime. Альтернатива — одновременно сканировать все установки и venv — требует отдельной иерархии состояний и фонового поиска проектов; она не нужна для выбора окружения. Альтернатива с единственным системным pip не покрывает уточнение пользователя.
+Extend native local apps with global npm packages and Python distributions, including main Python
+installations and project venvs. Reuse PackageManager and CommandRunning. The initial approach selected
+one active npm and Python runtime, with discovered and manually added choices. Scanning all runtimes
+was deferred then because it required separate runtime states and project discovery; it was subsequently
+implemented after user clarification. A system-only pip source would not meet the requested venv scope.
 
-В npm показываются глобальные пакеты выбранной установки Node/npm, включая scoped names. Учитывается nvm default, доступны другие найденные версии и ручной выбор npm. Проектные node_modules не сканируются.
+npm inventory includes scoped global names and nvm installations, but not project node_modules.
+Python inventory uses standard-library importlib.metadata on Python 3.8+ without installing libraries.
+Mutations run the exact selected `python -m pip`, without shell activation.
 
-В pip показываются distributions выбранного Python: основные установки и добавляемые пользователем venv. В каждый момент выбран один Python; в списке и карточке виден его путь. Данные читаются стандартной importlib.metadata, что поддерживает старый pip системного Python без установки новых библиотек. Операции выполняются выбранным `python -m pip`, без активации shell.
+## Behavior and safeguards
 
-## Поведение
+- Add npm/pip sidebar categories and native file/interpreter/venv selection. Persist additional paths;
+  never silently substitute another runtime for a saved missing one.
+- Probe prefix/base_prefix, pip availability, EXTERNALLY-MANAGED state, distribution ownership,
+  location, commands, description, and dependencies. Normalize names to avoid duplicate distributions.
+- Show Conda/foreign/system distributions with restrictions. Apply ownership protections in adapters
+  as well as UI. Do not use sudo or --break-system-packages.
+- Do not silently replace npm links, aliases/Git origins, or Python direct-URL/editable installs with
+  unrelated registry packages. Restrict npm/pip self-uninstall.
+- Accept npm outdated's normal exit code 1 with useful JSON. Malformed/error replies must not look
+  like a successful check. Checks are explicit and use configured registries; no startup network checks.
+- Revalidate runtime, environment, version, and restrictions immediately before changes.
+- Confirm removal against refreshed inventory. Distinguish global npm, one Python distribution,
+  and a uv/pipx tool environment. Pip removal does not remove the entire venv or unrelated dependencies.
 
-- Два новых пункта в боковой панели, иконки и типы пакетов.
-- В настройках источников — выбор npm и Python, добавление npm-файла и интерпретатора/venv через стандартный диалог. Выбор сохраняется; отсутствующий сохранённый runtime не подменяется другим автоматически.
-- Python probe возвращает prefix/base_prefix, наличие pip, EXTERNALLY-MANAGED, владельца distribution, расположение, команды, описание и зависимости. Имена distribution нормализуются для исключения дублей.
-- Пакеты, принадлежащие conda/другому менеджеру, системные и доступные из другого окружения показываются с причиной ограничения операций. Защита применяется и в адаптере, а не только в UI. Обычные pip/uv distributions в управляемом пользователем окружении доступны для операций, если установлен pip. `--break-system-packages` и sudo не используются.
-- Локальные npm-ссылки и Python direct URL/editable пакеты не заменяются молча пакетом из публичного реестра. Удаление самих npm/pip блокируется, чтобы сохранить управление источником.
-- npm outdated возвращает JSON и штатный код 1 при найденных обновлениях; это не ошибка. Ошибочные ответы и неполные данные не выдаются за успешную проверку.
-- Проверки npm/pip выполняются по явному действию пользователя через их настроенные реестры. Автоматических сетевых проверок при запуске нет. Отсутствие найденного обновления обозначается именно так.
-- Перед изменением адаптер перечитывает пакет и сверяет runtime, окружение, версию и ограничения. После удаления проверяется исчезновение пакета из реестра.
-- Подтверждение удаления различает global npm, отдельный Python distribution и окружения uv/pipx. Удаление pip-пакета не удаляет весь venv или зависимости автоматически.
+## Verification and limits
 
-## Проверка и границы
-
-Фикстуры, fake runner и временные файлы проверяют scoped names, семантику exit code 1, выбор runtime, старый Python, владение пакетами, внешние среды, команды и смену контекста. Реальные установки используются только для чтения; реальные upgrade/uninstall не запускаются. После полной suite — release-сборка, проверка подписи, интерфейс и независимый обзор.
-
-Версия приложения повышается до 0.2.0. Без новых зависимостей. Нет массового обновления, рекурсивного поиска проектов, управления conda или автоматической установки pip/Node/Python.
+Use fixtures, fake runners, temporary files, and isolated environments for scoped names, exit codes,
+old Python, ownership, exact commands, symlink identity, and changed contexts. Real installed packages
+are read-only during verification. Run the suite, release packaging/signature checks, native UI QA,
+and independent review. Shipped as 0.2.0 without new dependencies, bulk operations, Conda management,
+or automatic installation of Python/Node/pip. Later review added configuration-scope guards,
+protected dependency constraints, newer-version comparison, and a shared pip-check deadline.

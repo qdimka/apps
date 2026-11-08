@@ -1,59 +1,96 @@
-# Проверка apps 0.3.0
+# Verification evidence
 
-- `scripts/test.sh`: 92 проверки, 0 ошибок. Добавлены Go/Cargo, несколько runtime одного источника, точная адресация изменения, частичный отказ, фильтр окружений, обнаружение venv и общий deadline Go/Cargo.
-- Реальное чтение: Homebrew 63, Go 9, Cargo 0; npm из nvm v22.19.0 (8), v24.11.1 (3), v22.21.1 (3); Python Anaconda (471), системный (18), Homebrew (1), meshy-loader/.venv (2). Числа могут меняться при действиях пользователя.
-- Go Trash и staged build проверены на временных файлах с подставными командами. Для Cargo настоящий формат tracking registry и qualified uninstall проверены на временном локальном crate без зависимостей, offline и с отдельным root. Установленные инструменты агент не изменял.
-- Независимый обзор не нашёл Critical. Исправлены Important (общий deadline Go/Cargo) и Minor (npm-подпись показывает установку Node даже при общем npm prefix).
+This is a historical evidence record, not a claim that checks have run against every later change.
+Use [AGENTS.md](../AGENTS.md) for current verification requirements. Counts depend on installed tools.
 
-- Финальная 0.3.0 запущена: боковые категории Homebrew/uv/pipx/npm/pip/Go/Cargo, всего 578 записей; npm 14 из трёх установок, pip 492 из четырёх окружений. Проверены подписи строк, фильтр Node v24 (3 записи) и проектный venv meshy-loader (2 записи). Реальные операции над пакетами при UI-проверке агент не запускал.
-- Выявлен и исправлен блокирующий запуск: синхронный поиск проектных окружений до старта SwiftUI ожидал чтение каталогов. Инициализация модели теперь не сканирует диск; обнаружение выполняется Task.detached после появления окна. Успешный перезапуск исправленной сборки подтверждён.
-- Release build, `codesign --verify --deep --strict` и `plutil -lint` успешны. Стандартные кнопки закрытия/сворачивания присутствуют без дубликатов.
+## apps 0.3.0
 
-## История проверки 0.2.0
+**Code:** `9e274cf`, including Go/Cargo from `ad3c6d2` and the environment-inventory correction.
+**Date:** November 8, 2026.
 
-## npm и pip
+| Check | Observed result |
+| --- | --- |
+| `scripts/test.sh` | 92 checks, 0 failures |
+| `scripts/build-app.sh` | Release arm64 bundle built and ad hoc signed |
+| `codesign --verify --deep --strict dist/apps.app` | Passed |
+| `plutil -lint dist/apps.app/Contents/Info.plist` | Passed |
+| Read-only real inventory | Homebrew 63, Go 9, Cargo 0; npm 14 across three Node installations; pip 492 across four environments |
+| Native UI | Sidebar categories, environment row labels, Node v24 filter (3 entries), project venv filter (2 entries), exact manager details |
 
-- Автоматические проверки расширены до 69: npm scopes, prefix, JSON/exit code 1, изменившийся контекст, владельцы Python distributions, ограничения операций, предупреждения сети, nvm default, venv symlink, переключение одного источника и регрессии независимого обзора.
-- Временный настоящий venv создан с `--without-pip`; метаданные тестового distribution прочитаны через Python 3.9, затем временное окружение удалено. Пакеты не скачивались и не устанавливались.
-- Реальная инвентаризация и нативный интерфейс: Homebrew 63, npm 8, pip 471, uv tools 0; pipx отсутствует. Npm взят из nvm v22.19.0, основной pip — из Anaconda.
-- Проверены scoped npm-карточка, запрет pip-операций для conda-пакета с объяснением, окно выбора runtime, переключение на системный Python с 18 distributions и возврат к Anaconda. Остальные источники сохраняли свои данные. Реальные upgrade/uninstall не запускались.
-- Явный выбор одного окружения сохранён: приложение не объединяет все venv в одну неразличимую группу. Окружения проектов добавляются стандартным диалогом; его разрешение проверено отдельно для project/.venv и symlink-интерпретатора.
-- Настроенный отсутствующий Python не заменяется другой установкой. Для источников npm/pip выбор runtime сохраняется между запусками.
-- Финальная release-сборка после исправлений обзора собрана, plist и локальная подпись проверены. После разблокировки Mac проверен запуск финальной 0.2.0, общий список, npm (3 пакета, Node v24.11.1), pip (471 distribution Anaconda), список Python/venv и карточка aiofile. Штатные кнопки окна без дубликатов.
+Inventory breakdown: npm nvm v22.19.0 (8), v24.11.1 (3), v22.21.1 (3); Python Anaconda (471),
+system (18), Homebrew (1), and a project .venv (2). uv tools was empty and pipx absent.
+These are observations, not required counts or fixed fixtures.
 
-## Исправления обзора npm/pip
+Go Trash and staged replacement were tested with fake commands and temporary files. Cargo's real
+tracking schema and qualified path uninstall were checked with a dependency-free, offline local
+fixture and a separate temporary root. The agent did not update or uninstall user-installed tools.
 
-Все существенные замечания исправлены: конфигурация pip не может менять интерпретатор, каталог или число целей; имена distributions валидируются целиком и передаются каноническими; защищённые версии закрепляются constraints. Неполные ответы индекса не становятся подтверждением актуальности; проверка имеет общий deadline. npm сравнивает SemVer и устанавливает точную более новую версию; alias/Git сохраняют исходный способ управления. Удаление pip проверяет конкретную установку, отличая открывшуюся нижележащую копию.
+Independent review found no Critical issues. An Important shared-deadline finding was fixed with
+cancellable Go/Cargo checks and regression cases; a Minor npm label finding was fixed by showing
+the Node installation rather than only a possibly shared global prefix. Multi-runtime tests cover
+independent failures, exact mutation dispatch, filtering, and venv symlink identity.
 
-Принятые решения: опасные настройки pip отклоняются, а не игнорируются вместе с настройками реестра (для таких конфигураций потребуется Terminal). Используется чтение Configuration установленного pip; несовместимая версия приводит к отказу операции. Общий deadline pip — 60 секунд: длинная проверка завершится ошибкой и может потребовать повторения.
+A native launch initially blocked on synchronous project-directory discovery before SwiftUI startup.
+A sampled stack identified AppModel initialization → projectPythons → directory access. Discovery
+was moved into Task.detached after the window appears, and the corrected bundle launched successfully.
+Native close/minimize/fullscreen controls exist without custom duplicates; macOS capture can replace
+their visual area with a sharing indicator.
 
-Отложенное мелкое замечание: противоречивый ответ npm outdated с exit 1 и пустым JSON пока не выделяется отдельной ошибкой. Перед изменением npm всё равно отдельно проверяет целевую версию.
+## apps 0.2.0 history
 
-## История проверки 0.1.0
+**Code:** npm/pip work through `d8c1636`.
 
-## Результаты
+- 69 automated checks passed, covering scopes/prefixes, JSON/exit codes, stale contexts, distribution
+  ownership, restrictions, registry uncertainty, nvm defaults, venv symlinks, and review regressions.
+- A real temporary venv created with --without-pip verified standard-library metadata probing on
+  Python 3.9. No package downloads or user-environment changes were needed.
+- Observed inventory included Homebrew 63, npm 8, Anaconda pip 471, uv 0, and no pipx. Later native
+  verification used the saved Node v24 installation with 3 globals after local installation changes.
+- Inspected scoped npm details, protected Conda-owned Python packages, runtime settings, system Python
+  with 18 distributions, and return to Anaconda. Actual upgrade/uninstall operations were not used for QA.
+- At this release one active npm/Python runtime was selected. That behavior is historical and was
+  superseded in 0.3 by simultaneous multi-environment inventory.
+- The final release bundle's plist/signature and launch were checked after the Mac was unlocked.
 
-- `scripts/test.sh`: 33 проверки, 0 ошибок после исправления замечаний независимого обзора.
-- `scripts/build-app.sh`: release-сборка arm64 для macOS 14+, успешная упаковка и локальная подпись ad hoc.
-- `codesign --verify --deep --strict dist/apps.app` и `plutil -lint`: успешно.
-- Реальное чтение: 63 пакета Homebrew, 0 инструментов uv; pipx отсутствует.
-- Проверены запуск нативного окна, поиск ripgrep, карточка с версиями и путями, тёмная тема. Добавленные в боковую панель кнопки окна удалены после сообщения пользователя о дублировании; приложение использует только штатные кнопки macOS в строке заголовка.
-- Проверка обновлений через интерфейс завершилась по локальным метаданным Homebrew. Реальные пакеты не обновлялись и не удалялись.
-- Светлая тема использует системные цвета; отдельная ручная проверка светлой темы не проводилась. Положительные операции обновления/удаления проверялись на подставных менеджерах.
+Review fixes included rejecting pip configuration that changes interpreter/destination/target scope,
+canonical distribution operands, protected dependency constraints, uncertain index results, a shared
+pip-check deadline, npm SemVer/no-downgrade rules, origin restrictions, and exact pip removal identity.
+The pip guard reads the installed pip Configuration API; incompatible versions fail closed while
+registry settings remain available. Its overall check deadline is 60 seconds per interpreter.
 
-## Исправления обзора
+## apps 0.1.0 history
 
-Все существенные замечания воспроизведены регрессионными проверками до исправления. Убраны миграции `brew update` из проверки обновлений; отключены постороннее автоудаление и автоматическая обработка обратных зависимостей Homebrew; результат удаления подтверждается новым списком; ошибки проверки сбрасывают прежние статусы. Неопределённая актуальность каталога и пропущенная проверка cask не выдаются за последнюю версию. Сообщения ошибок ограничены по длине. При тайм-ауте завершается группа процессов с дочерними установщиками. Источники читаются параллельно, операции изменения — последовательно.
+- 33 checks passed after review fixes; release packaging, signature, and plist validation succeeded.
+- Real inventory read Homebrew 63 and uv 0; pipx was absent.
+- Inspected native launch, ripgrep search/details, paths, empty/error behavior, and dark appearance.
+  Light appearance uses semantic system colors but was not separately inspected.
+- Duplicate sidebar window controls were removed following user feedback. Only native controls remain.
+- Update checks read Homebrew metadata. Positive upgrade/uninstall cases used fake managers.
 
-## Принятые решения и ограничения
+Review removed brew update from checks because migrations can change installed packages. It also
+prevented unrelated Homebrew autoremove/dependent processing, confirmed removals after refresh,
+reset stale update statuses on failed checks, bounded errors, terminated child process groups,
+and published independent source reads without waiting for a slow source.
 
-- Работа выполнялась в новой рабочей папке на ветке `feat/apps-macos`. Отдельная рабочая копия не создавалась: изменения разделяют текущий checkout.
-- Для uv 0.9.3 используется текстовый `tool list --show-paths --color never`: новый формат может потребовать изменения парсера; неожиданный ответ отображается как ошибка источника.
-- Кеши сборки размещены внутри `.build`; скрипт обходит обнаруженное смешение интерфейсов Swift 5.10/6.1 и дублирующий modulemap, не меняя системные файлы. Для этой установки Command Line Tools следует использовать скрипты проекта.
-- XCTest заменён проверочной исполняемой целью: CI должен запускать `scripts/test.sh`.
-- Вывод команд записывается в приватные временные файлы, затем читается: журнал появляется после завершения команды, а не в реальном времени.
-- Проверка использует локальный каталог Homebrew: свежесть каталога не подтверждается, а отсутствие найденного обновления остаётся неизвестным статусом.
-- Для каждого источника выбирается первая найденная установка: пакеты параллельной установки Homebrew/uv/pipx не объединяются.
-- Публикация и нотариализация отложены: готовое приложение рассчитано на собственный Mac.
+## Known limits and deferred findings
 
-Отложенное мелкое замечание: при обновлении только ревизии Homebrew целевая версия может отображаться без суффикса `_N`. Само обновление выполняет Homebrew с его штатным учётом ревизии.
+- npm outdated exit 1 with an empty JSON object is not separately rejected as contradictory.
+  Mutation still independently checks its target version.
+- A Homebrew revision-only update can show a target version without the `_N` suffix; Homebrew itself
+  still handles the revision during upgrade.
+- uv parsing targets the supported text format; unexpected formats produce a source error.
+- Manager output is available after command completion, not streamed live. Timeouts do not roll back
+  partial package-manager changes. Registry caches/lock files may be created by inventory commands.
+- Homebrew catalog freshness is not verified. One Homebrew/uv/pipx installation is discovered per source.
+- Full XCTest is absent on the development Command Line Tools installation. Use the executable check
+  target and repository toolchain wrapper instead of changing system SDK files.
+- Work was performed in the shared feature checkout; no merge, push, notarization, or public release
+  was performed. The bundle is intended for local use.
+
+## Documentation and screenshots
+
+The English documentation refresh changes no executable code. Three genuine app-window captures
+were saved under docs/assets and inspected: npm environments, a project venv, and Go tool details.
+The UI remains Russian; no screenshots were edited to imply an English interface. Documentation
+verification checks local Markdown targets, image signatures/dimensions, English prose, and whitespace.
+Automatic instruction loading in a new host session was not exercised in this documentation-only change.

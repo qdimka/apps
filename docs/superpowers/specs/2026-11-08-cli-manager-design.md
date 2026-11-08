@@ -1,53 +1,59 @@
-# apps — менеджер CLI для macOS: первая версия
+# apps: initial macOS CLI manager design
 
-## Назначение
+**Status:** Historical 0.1 specification. Later specifications extend source coverage;
+[architecture.md](../../architecture.md) describes the current implementation.
 
-Бесплатное локальное приложение для владельца Mac, который вместе с агентами устанавливает много консольных утилит. Приложение объединяет просмотр установленных инструментов, проверку обновлений, обновление и удаление. Первая версия предназначена для собственного использования.
+## Purpose and chosen approach
 
-## Выбранный подход
+A free local app for a Mac owner who installs many command-line tools with agents. Combine
+installed inventory, explicit update checks, individual upgrades, and removal for personal use.
+The user chose native SwiftUI. Tauri was considered for portability but added a stack without
+benefiting this macOS-only scope. Reuse existing Homebrew, uv, and pipx rather than building a manager.
 
-Пользователь выбрал нативное приложение на SwiftUI. Альтернатива — Tauri с веб-интерфейсом: удобнее для переноса на другие платформы, но требует дополнительного стека и не даёт преимуществ для текущей задачи. Приложение использует существующие Homebrew, uv и pipx; собственный менеджер пакетов не создаётся.
+## Initial scope
 
-## Объём первой версии
+- Discover Homebrew, uv tools, and pipx; read installed packages independently.
+- Combined inventory, source/search/update filters, and a selected package detail.
+- Show source, installed version, available version where known, installation path, commands,
+  and dependencies when supplied by the manager.
+- Check versions only on explicit request; upgrade or uninstall one selected package.
+- Confirm removal with name, source, and version; show progress, results, and a session log.
 
-- Обнаружение доступных Homebrew, uv и pipx и чтение их установленных пакетов.
-- Общий список, поиск, фильтры по источнику и доступности обновления.
-- Карточка пакета: имя, источник, установленная версия, доступная версия при возможности её определить, путь к управляемой установке; расположение запускаемых команд и зависимости — если источник предоставляет эти данные.
-- Проверка обновлений по явному действию пользователя.
-- Обновление и удаление одного выбранного пакета.
-- Подтверждение удаления с именем, источником и установленной версией.
-- Статус текущей операции, её результат и журнал вывода.
+Equal names in different sources remain separate: identity includes source, manager installation,
+and package name. Inventory comes from manager registries, not just command presence in PATH.
+Missing managers have an explanation and do not break the rest of the app.
 
-Одинаковые имена в разных источниках отображаются отдельными строками. Идентификатор включает источник, его установку и имя пакета. Пакет определяется по реестру менеджера, а не только по наличию команды в PATH. Отсутствующий менеджер не является ошибкой приложения: соответствующий источник показывает объяснение.
+## Native interface
 
-## Интерфейс
+A standard macOS window with source sidebar, package list, and detail panel. Use native SwiftUI
+controls, system typography/colors, and system light/dark appearance. Search and refresh/check
+controls live in the toolbar; details expose upgrade, removal, and the log. Source failures remain local.
 
-Обычное окно macOS с боковой панелью источников, списком пакетов и панелью подробностей. Нативные элементы SwiftUI, системные шрифты, светлая и тёмная темы, акцентный цвет системы. Вверху — поиск, обновление списка и проверка обновлений. В карточке — действия «Обновить», «Удалить» и журнал последней операции. Ошибки одного источника не скрывают данные остальных.
+## Architecture and operations
 
-## Архитектура и операции
+Separate UI state from manager adapters and package records. The original proposal used Foundation
+Process; the delivered runner evolved to POSIX process groups for reliable cancellation. Commands
+receive separate arguments without shell concatenation; output must not block the interface.
+Serialize changes and reread the affected registry even after failure. Report nonzero exits clearly.
 
-SwiftUI и отдельная модель состояния интерфейса. Адаптер каждого менеджера реализует обнаружение, список, проверку обновлений, обновление и удаление. Объект пакета содержит источник, идентификатор, версии и доступные метаданные.
+Discovery covers PATH, standard Apple Silicon/Intel Homebrew locations, and user tool directories.
+Show the actual manager path. Run as the current user without sudo; interactive/admin requirements
+are reported for handling in Terminal. Use machine-readable data where supported. Unknown metadata
+must not block inspection; unsupported checks stay unknown rather than claiming freshness.
 
-Внешние команды запускаются через Foundation Process с отдельными аргументами, без конкатенации shell-команд. stdout и stderr читаются асинхронно, интерфейс остаётся отзывчивым. Операции изменения выполняются последовательно. Ненулевой код завершения отображается как ошибка с деталями; после изменения перечитывается соответствующий источник.
+The package list is not a separate database of truth. Store preferences in UserDefaults and keep
+logs in the current session. Registry configuration belongs to the installed manager.
 
-Обнаружение учитывает стандартные пути Apple Silicon и Intel Homebrew, пользовательские установки uv/pipx и PATH; неоднозначность разрешается явно показанным путём менеджера. Команды выполняются от текущего пользователя, без sudo. Если нужны дополнительные права или интерактивный ввод, операция завершается с понятным сообщением.
+## Deferred from the initial version
 
-Для Homebrew используются машиночитаемые сведения brew. Для uv/pipx — доступные структурированные данные соответствующих версий. Способ проверки обновлений уточняется по фактическим возможностям CLI: если менеджер не предоставляет проверку без изменения окружения, интерфейс показывает «неизвестно», а не выдумывает актуальность. Действие обновления остаётся доступным для поддерживаемого пакета. Проверка использует штатные настройки источников менеджера; отдельные запросы в публичный PyPI не обязательны.
+Arbitrary pip/venv/Conda environments, manual binaries, new-package installation, bulk changes,
+scheduled updates, rollback, cleanup, services, public distribution, notarization, and self-update.
+Later specifications added pip/venv support. No account, cloud server, analytics, or mandatory paid service.
 
-Журнал доступен в текущем сеансе. Настройки фильтров можно хранить через UserDefaults. Список пакетов не является отдельной базой истины — он перечитывается из менеджеров.
+## Verification and acceptance
 
-## Что отложено
-
-Произвольные pip/venv/conda-окружения, ручные бинарники, установка новых пакетов, массовые операции, автоматическое обновление по расписанию, откат версий, очистка диска, управление службами, публикация, нотариализация и обновление самого приложения. Нет аккаунта, облачного сервера, аналитики и обязательных платных сервисов.
-
-## Сборка и проверка
-
-Предлагаемая минимальная версия — macOS 14. Проект Swift Package Manager с исполняемой целью и скриптом сборки локального .app. Сборка доступным Swift toolchain, тесты разбора данных и корректной передачи аргументов на фикстурах без изменения реальных пакетов. Проверка запуска приложения и состояний пустого списка/ошибки, если среда позволяет. Обновлять или удалять реальные инструменты пользователя для тестирования не требуется.
-
-## Решения, оставленные реализации
-
-Название приложения — apps (выбрано пользователем). Точные цвета, размеры, SF Symbols, организация исходников и выбор конкретных CLI-флагов определяются при реализации после проверки установленного инструментария и документации. Неизвестные поля метаданных не блокируют просмотр пакета.
-
-## Критерии готовности
-
-Локальный .app собирается и запускается; доступные источники читаются независимо, список фильтруется; у выбранного пакета видны источник и версия; реализованы последовательные операции обновления и удаления с подтверждением удаления, выводом результата и обновлением списка. Проверки не изменяют реальные установки без отдельного согласования.
+Target macOS 14 with Swift Package Manager and a local app-bundle script. Test parsers and exact
+arguments with fixtures; inspect the native window, empty lists, and source errors where accessible.
+Do not mutate real user tools for verification. A local bundle must launch, inventory/filter independently,
+show source/version, serialize changes, confirm removal, and refresh with accurate results.
+The user selected the name apps; exact icons, sizing, colors, and CLI flags were implementation choices.

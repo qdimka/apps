@@ -1,23 +1,42 @@
-# apps 0.3: Go, Rust и общий список
+# apps 0.3: Go, Rust, and package inventory
 
-Пользователь запросил Go/Rust и замену боковой навигации по источникам общим списком с меткой источника в каждой строке и фильтром над списком. Продолжаем существующие адаптеры PackageManager и SwiftUI.
+**Status:** Go/Cargo adapter design shipped. The original two-column/source-dropdown UI interpretation
+was rejected by user clarification; use [environment inventory](2026-11-08-environment-inventory-design.md)
+for navigation and filtering. Do not remove the source sidebar based on this historical design.
 
-## Интерфейс
+## Original UI proposal, superseded
 
-Две колонки: общий список и карточка. При запуске показываются все источники; старое сохранённое выделение боковой панели не применяется. Над списком — источник «Все / Homebrew / uv / pipx / npm / pip / Go / Cargo», поиск и фильтр обновлений. Метка источника видна всегда, независимо от статуса обновления, закрепления или ограничений. Состояние источников доступно отдельным раскрывающимся окном; ошибки одного источника не скрывают прочие пакеты. Выбор npm/Python сохраняется в настройках, туда добавляется выбор каталога Cargo.
+A combined package list and details, a source dropdown above the list, and persistent source badges.
+The proposal retained one active npm/Python in settings and added Cargo root selection. The final
+implementation instead keeps source categories and combines all npm/Python runtime inventories.
 
 ## Go
 
-Список обычных исполняемых файлов из GOBIN, либо первого GOPATH/bin. Метаданные читаются `go version -m -json`; нужен Go 1.25+ для JSON. Не сканируются кеши модулей и произвольный PATH. Symlink и чужие файлы не изменяются; нераспознанные файлы не объявляются Go-утилитами. Карточка показывает команду, модуль, версию, файл и зависимости. Локальные/devel/replaced/custom-build установки не заменяются обычным модулем.
+Inspect regular executable files in GOBIN or the first GOPATH/bin with `go version -m -json`;
+Go 1.25+ is required. Do not scan module caches or arbitrary PATH entries. Do not modify symlinks
+or foreign-owned files; unrecognized files are not presented as Go tools. Show command, module,
+version, file, and dependencies. Local/development/replaced/custom builds cannot auto-upgrade.
 
-Проверка свежей версии — `go list -m -json module@latest`, без изменения установок, с общим deadline. Обновляется только более новая SemVer-версия. Сборка выполняется в приватный временный GOBIN внутри исходного каталога, GOFLAGS очищается; сохранены GOOS/GOARCH/CGO_ENABLED. Проверяются пакет/модуль/версия результата и неизменность исходного файла; затем ровно один бинарник атомарно заменяется. Удаление перемещает выбранный файл в Корзину после повторной проверки идентичности.
+Check `go list -m -json module@latest` under a shared deadline. Install only a newer SemVer target.
+Build into a private temporary GOBIN inside the original directory, clear GOFLAGS, and preserve
+recorded platform/CGO options. Verify output package/module/version and original-file identity
+before atomically replacing one binary. Removal sends the revalidated owned file to Trash.
 
 ## Rust / Cargo
 
-Cargo binary crates читаются из .crates2.json выбранного install root, с идентичностью root + package ID. Пустой реестр означает пустой список; повреждённый JSON — ошибка. Старый реестр при отсутствии JSON можно читать через cargo install --list, с ограничениями операций из-за отсутствия точных параметров установки.
+Read installed binary crates from .crates2.json under an explicit root. Identity includes root
+and tracking package ID. Empty metadata is a valid empty inventory; corrupt JSON is an error.
+Legacy entries can be read through cargo install --list with view-only restrictions.
 
-Для обычных crates.io установок поиск обновлений через cargo search (строгое совпадение имени), SemVer и общий deadline; установка точной более новой версии в исходный --root, с исходными binaries/features/profile/target и --locked, без --force. Git/path/альтернативные registry не заменяются crates.io. Uninstall адресует точный Cargo package ID и root, не затрагивая toolchain rustup или проекты. Каталог по умолчанию берётся из CARGO_INSTALL_ROOT/CARGO_HOME/~/.cargo; иной install.root можно выбрать вручную.
+For crates.io, use exact-name cargo search and SemVer comparison under a shared deadline. Install
+a concrete newer version into the same --root with recorded bins/features/profile/target and --locked,
+without --force. Never turn Git/path/alternative-registry installs into crates.io packages. Uninstall
+uses a qualified package ID and root, leaving rustup toolchains/projects untouched. Root defaults to
+CARGO_INSTALL_ROOT/CARGO_HOME/~/.cargo; custom install.root is selected manually.
 
-## Границы и проверка
+## Boundaries and verification
 
-Нет установки менеджеров, массового обновления, управления rustup toolchains или библиотеками проектов. Команды только с отдельными аргументами, без shell. Реальные пакеты не меняются во время проверки: используются JSON fixtures, fake runner и временные файлы. Полная suite, сборка/подпись, нативный smoke и независимый обзор. Без сторонних зависимостей.
+No manager installation, bulk updates, rustup management, or project dependency inventory.
+Pass separate arguments without shell evaluation. Verify with fixtures, fake runners, temporary files,
+full checks, release/signature checks, native UI QA, and independent review. Do not change real user
+packages as a test. No external Swift dependencies.

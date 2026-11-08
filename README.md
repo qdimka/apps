@@ -1,10 +1,40 @@
 # apps
 
-Бесплатное нативное приложение macOS для просмотра установленных CLI-инструментов и управления ими. SwiftUI, macOS 14+, без сторонних библиотек, аккаунта и сервера. Первая версия предназначена для локального использования.
+A free, native macOS app for keeping track of the CLI tools you and your agents install.
+Browse packages across package managers, see which environment owns each installation, and update or remove individual tools from one window.
 
-## Сборка и запуск
+Built with SwiftUI for macOS 14+. Runs locally, with no account, server, analytics, or third-party Swift dependencies. Intended for personal use.
 
-Нужны Command Line Tools с Swift 6 или Xcode. Из корня проекта:
+![apps showing global npm packages across multiple Node.js installations](docs/assets/npm-environments.jpg)
+
+## What you can do
+
+- Browse Homebrew, uv tools, pipx, npm, pip, Go, and Cargo from the sidebar.
+- See packages from all discovered Node.js installations and Python environments together, with an environment label on every npm/pip row.
+- Filter by environment, search by name or description, and show packages with a detected update.
+- Inspect versions, installation paths, commands, dependencies, and operation restrictions.
+- Update or uninstall one installation, with confirmation before removal and an operation log.
+- Add a Python interpreter, project venv, Node.js installation, or custom Cargo installation root.
+
+The current application interface is in Russian; this documentation is in English. Screenshots show the actual app, without translating or replacing its interface. The sharing indicator in the upper-left corner is added by macOS during window capture; apps uses standard native window controls.
+
+## Supported sources
+
+| Source | Inventory | Update checks and operations |
+| --- | --- | --- |
+| Homebrew | Installed formulae and casks, including libraries | Checks the local catalog; updates and uninstalls individual packages |
+| uv tools | Managed Python CLI environments | Native upgrade and uninstall; separate version checks are unavailable |
+| pipx | Managed Python CLI environments | Native upgrade and uninstall; separate version checks are unavailable |
+| npm | Global packages from each discovered Node.js installation | Registry checks; exact newer versions; scoped names supported |
+| pip | Distributions in each discovered Python or venv | Index checks; upgrade/uninstall through that exact interpreter; protected packages remain restricted |
+| Go | Executables in `GOBIN` or the first `GOPATH/bin` | Module version checks; verified staged builds; removal to Trash |
+| Cargo | Binary crates tracked in the selected installation root | crates.io version checks; upgrade with recorded build options; source-qualified uninstall |
+
+Go inventory requires Go 1.25+ for JSON build information. Python inventory requires Python 3.8+ and uses the standard library even when pip is absent. Each source needs its existing manager; apps does not install managers.
+
+## Build and run
+
+Requirements: macOS 14+ and a Swift 6 toolchain from Xcode or Command Line Tools.
 
 ```sh
 scripts/test.sh
@@ -12,69 +42,67 @@ scripts/build-app.sh
 open dist/apps.app
 ```
 
-Готовое приложение находится в `dist/apps.app`. Его можно перенести в `~/Applications`. Сборка выполняется для архитектуры текущего Mac. Платный Apple Developer Account не нужен: скрипт ставит локальную подпись ad hoc, а не подпись для публичного распространения.
+The output is `dist/apps.app`, built for the current Mac's architecture. You can copy it to `~/Applications`. The build script applies an ad hoc signature for local use; a paid Apple Developer account is not required. This is not a notarized public distribution.
 
-Для отладочной сборки: `scripts/build-app.sh debug`. В обычной установке Swift можно также использовать `swift build`; скрипты проекта дополнительно направляют кеши внутрь `.build` и обходят обнаруженные несогласованные интерфейсы некоторых установок Command Line Tools, не изменяя системные файлы.
-
-## Возможности
-
-- Общий список Homebrew formulae/casks, uv tools, pipx, глобальных npm-пакетов, Python distributions, Go CLI и Rust/Cargo CLI.
-- Категории источников находятся в боковом меню. Для npm/pip пакеты всех найденных окружений видны вместе; в каждой строке подписано окружение, над списком расположен фильтр по нему.
-- Версии, источник, менеджер, расположение установки, команды и зависимости, если источник предоставляет сведения.
-- Обновление и удаление одного пакета, подтверждение удаления, журнал и результат операций.
-- Светлая и тёмная темы следуют настройке macOS.
-- Объединение установок Node/npm и Python, обнаружение проектных venv и ручное добавление окружений.
-
-**Обновить список** (`⌘R`) только перечитывает установленное. **Проверить обновления** (`⇧⌘R`) перечитывает локальный каталог Homebrew без `brew update`: эта команда способна выполнять миграции установленных пакетов. Найденное обновление показывается по имеющимся данным; если обновление не найдено, актуальность версии остаётся неизвестной, поскольку свежесть каталога не подтверждена. Сам каталог при необходимости можно обновить через Terminal. Для uv/pipx проверка новой версии в этой версии apps не реализована: интерфейс оставляет статус неизвестным. Кнопка **Обновить** запускает `uv tool upgrade` или `pipx upgrade` для выбранного инструмента.
-
-Каждая строка — отдельный пакет конкретного источника. pipx-пакет с несколькими командами остаётся одной строкой; суффиксы окружений сохраняются. Приложение показывает все формулы Homebrew, включая библиотеки и зависимости, поэтому список не ограничен пользовательскими исполняемыми файлами.
-
-## Go и Rust
-
-Go CLI читаются из настроенного `GOBIN` или первого `GOPATH/bin`. Нужен Go 1.25+ с JSON build-info. Приложение не запускает найденные бинарники: модуль, версию и зависимости читает `go version -m -json`. Локальные, заменённые модули и особые сборки видны, но автоматическое обновление отключено. Для обычной установки проверяется версия модуля; новая версия собирается в отдельном временном GOBIN и проверяется перед заменой одного бинарника. Удаление перемещает только выбранный файл в Корзину. Go и кеш модулей остаются.
-
-Rust CLI — установки `cargo install` из реестра Cargo. По умолчанию используется `CARGO_INSTALL_ROOT`, `CARGO_HOME` или `~/.cargo`. Другой root (включая `install.root` из конфигурации) выбирается в **Источники → Выбрать каталог Cargo…**. Проектные crates и toolchains rustup не входят в список. Для crates.io доступны проверка версии и обновление с сохранением bin/features/profile/target. Git/path/сторонние registry показываются с ограничением обновления, чтобы сохранить их исходное происхождение. Cargo удаляет только выбранную установку из явно указанного root. Старые записи без полных метаданных доступны только для просмотра.
-
-Вся проверка обновлений одного источника Go/Cargo ограничена 60 секундами. Реальные обновления выполняются штатными компиляторами и могут занять несколько минут. Произвольные нестандартные параметры исходной сборки не восстанавливаются.
-
-## npm и pip
-
-Категории **npm** и **pip** в боковом меню показывают пакеты всех обнаруженных установок. Для npm читаются глобальные пакеты каждой установки Node, включая scoped names и версии nvm. Одинаковый пакет в разных установках отображается отдельными строками: подпись Node.js показывает расположение установки. В pip каждая строка подписана Python-окружением. Фильтр **Все установки Node.js / Все Python-окружения** над списком меняет только отображение. Для изменения пакета используется точный npm или интерпретатор его строки.
-
-Автоматически обнаруживаются Python из стандартных путей, реестр Conda и venv в `~/Documents/Repositories`, `~/Projects`, `~/Developer`, `~/code`, `~/.virtualenvs`, `~/.local/share/virtualenvs`, `~/.pyenv/versions`. Поиск ограничен глубиной 5, 2500 каталогами и 150 окружениями; деревья зависимостей и символьные ссылки пропускаются. Для других расположений нажмите **Источники → Добавить Python или venv…**. Можно указать интерпретатор, каталог venv либо проект с `.venv`/`venv`. Node добавляется кнопкой **Добавить установку Node.js…**. Добавленные пути сохраняются; повторное чтение списка ищет новые окружения. Недоступное сохранённое окружение показывает ошибку, остальные продолжают работать.
-
-Пакеты читаются через `importlib.metadata` из стандартной библиотеки Python 3.8+, даже если pip в окружении не установлен. Изменения выполняются строго через выбранный `python -m pip`. В Anaconda показываются также conda distributions, но операции над ними через pip отключены. Аналогично ограничены системные пакеты, EXTERNALLY-MANAGED окружения, пакеты из другого окружения и установки с неизвестным владельцем. Причина показана в карточке; `sudo` и `--break-system-packages` не используются.
-
-Явная проверка обновлений npm и pip обращается к реестрам из их конфигурации. Обычное чтение списка при запуске сетевых проверок не выполняет. npm запрашивает версию из реестра, сравнивает SemVer и устанавливает конкретную более новую версию с выбранным prefix: более новый установленный prerelease не откатывается на старый latest. pip использует `install --upgrade`. Для пользовательской pip-установки сохраняется `--user`. Перед изменением повторно проверяются версия, окружение и ограничения. Локальные npm-ссылки, npm aliases/Git и direct URL/editable Python-пакеты не заменяются автоматически реестровыми установками. Удаление самих npm и pip отключено.
-
-Для pip версии защищённых distributions закрепляются на время разрешения зависимостей: несовместимое требование к conda-пакету останавливает обновление. Настройки pip, меняющие интерпретатор, каталог или набор целей (например, requirement/target/prefix/root), приводят к отказу до изменения; настройки реестров сохраняются. Причина указана в журнале. Общий лимит проверки pip — 60 секунд. Отсутствие строки в pip outdated не доказывает актуальность, поэтому непроверенные версии остаются неизвестными.
-
-При удалении pip-пакета удаляется только выбранная установка distribution: окружение и остальные зависимости сохраняются. Если после удаления пользовательской копии становится видна другая копия, приложение сообщает об этом и сбрасывает выбор. Для uv/pipx по-прежнему удаляется отдельное окружение инструмента. Проектные `node_modules` не сканируются.
-
-## Обнаружение менеджеров
-
-Проверяются PATH процесса, `~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, стандартные каталоги Anaconda/Miniconda и `~/Library/Python/*/bin`. Найденный исполняемый файл показывается в карточке. Для каждого источника выбирается первая найденная установка; параллельные Intel/ARM Homebrew не объединяются.
-
-Для npm/Python нестандартное расположение можно выбрать в **Источниках**. Для остальных менеджеров запустите `dist/apps.app/Contents/MacOS/apps` из Terminal с нужным PATH. После установки нового менеджера перезапустите apps. Приложение не запускает shell startup scripts и не устанавливает отсутствующие менеджеры автоматически.
-
-## Операции и ограничения
-
-Изменения выполняются по одному от текущего пользователя, без sudo и принудительного удаления зависимостей. Автоматическое удаление посторонних осиротевших пакетов и автоматическое обновление/переустановка обратных зависимостей Homebrew отключены. После обновления библиотеки её потребителям иногда потребуется отдельное обновление. Обновление пакета может обновить его зависимости по штатным правилам менеджера. После операции перечитывается соответствующий источник, в том числе при ошибке. Удаление подтверждается только после исчезновения пакета из реестра. Независимые источники читаются параллельно. Закреплённые пакеты нельзя обновить через apps; снять закрепление можно в менеджере.
-
-Если менеджеру нужны права администратора или интерактивный ввод, смотрите ошибку в журнале и используйте Terminal. Задачи ограничены 30 минутами; при превышении процесса ожидания apps завершает группу процессов команды, включая её дочерние установщики, но не выполняет откат изменений. Вывод двух потоков сохраняется отдельно во временных приватных файлах и доступен после завершения команды. Журнал хранится только в текущем сеансе.
-
-Чтение списков может создавать служебные lock-файлы или кеши самих менеджеров. Настройки источников и индексов берутся из окружения процесса и конфигурационных файлов менеджеров; shell-переменные Terminal могут отличаться от окружения приложения, открытого через Finder.
-
-Не поддерживаются управление conda, рекурсивный поиск окружений по всему диску, ручные бинарники, установка новых пакетов, массовые изменения, откат, автоматические обновления, очистка и управление службами. uv поддерживается через текстовый формат `tool list --show-paths --color never`; неожиданный формат показывается как ошибка источника.
-
-## Проверки
+For a debug app bundle:
 
 ```sh
-scripts/test.sh
-# Реальная инвентаризация без upgrade/uninstall:
-scripts/swift-local.sh run AppsCoreChecks --inventory
+scripts/build-app.sh debug
 ```
 
-`AppsCoreChecks` — отдельная проверочная Swift-цель, поэтому тестам не требуется XCTest из полного Xcode. Проверяются разбор данных, аргументы команд, отмена и тайм-аут, большой stdout/stderr, независимость источников и последовательность операций. Изменения пакетов тестируются на подставных менеджерах; реальные установки не удаляются и не обновляются.
+Use the repository scripts on the development machine: they keep caches under `.build` and work around the detected Command Line Tools interface/module-map mismatch without modifying system files.
 
-Источники форматов команд: [Homebrew Manpage](https://docs.brew.sh/Manpage), [uv CLI reference](https://docs.astral.sh/uv/reference/cli/), [pipx source](https://github.com/pypa/pipx), [npm CLI](https://docs.npmjs.com/cli/v10/commands/npm-ls/), [pip list](https://pip.pypa.io/en/stable/cli/pip_list/).
+## Node.js and Python environments
+
+Open **npm** or **pip** in the sidebar to see all discovered installations of that source. Identical package names in different environments remain separate rows. The filter above the list changes visibility, not the operation target: an action always uses the npm executable or Python interpreter belonging to its row.
+
+npm discovery includes PATH and nvm installations. Python discovery includes standard locations, the Conda environment registry, and bounded searches under:
+
+```text
+~/Documents/Repositories    ~/Projects    ~/Developer    ~/code
+~/.virtualenvs             ~/.local/share/virtualenvs    ~/.pyenv/versions
+```
+
+Project discovery stops at depth 5, 2,500 visited entries, or 150 environments. Dependency trees and directory symlinks are skipped. Use the source settings button in the toolbar to add installations outside those locations. A refresh discovers new environments; saved unavailable environments report their own error while healthy environments remain usable.
+
+![A project venv selected in the environment filter, with the wasmtime distribution and its exact interpreter](docs/assets/python-venv.jpg)
+
+Conda-owned distributions, system packages, externally managed environments, and packages with unknown or foreign ownership are visible with an explanation of their restrictions. apps does not use `sudo` or `--break-system-packages`. Removing a pip distribution leaves its environment and unrelated dependencies in place; removing a uv/pipx tool removes its managed tool environment.
+
+## Go and Rust tools
+
+Go metadata is read with `go version -m -json`; discovered executables are not run. Local, development, replaced-module, or custom builds can be inspected but are restricted from automatic upgrades. A supported upgrade builds a newer version in a private staging directory, verifies the package/module/version, revalidates the original file, and replaces only that binary. Removal moves the selected owned binary to Trash, leaving Go and its module cache in place.
+
+![Go tools with the gopls module, version, executable location, and manager](docs/assets/go-tool-details.jpg)
+
+Cargo inventory uses `.crates2.json`. The default root comes from `CARGO_INSTALL_ROOT`, `CARGO_HOME`, or `~/.cargo`; choose a custom root in source settings if you use `--root` or `install.root`. crates.io upgrades preserve recorded binaries, features, profile, and target. Git, path, and alternative-registry installs are not converted into crates.io installs. Legacy entries without complete metadata are view-only. Project dependencies and rustup toolchains are outside the inventory.
+
+## Refreshing and making changes
+
+**Refresh** (`⌘R`) rereads installed packages. **Check updates** (`⇧⌘R`) explicitly queries supported sources; startup does not automatically check remote versions.
+
+Homebrew checks use its existing local catalog. apps does not run `brew update` during a check because it can migrate installations. No detected update therefore does not prove that the installed version is the latest. uv/pipx checks remain unknown; their upgrade buttons invoke the manager's native upgrade operation. Incomplete pip index results also remain unverified.
+
+Changes run one at a time as the current user. The adapter revalidates the selected installation before acting and rereads its inventory afterward, including after failure. Homebrew automatic removal of unrelated orphaned packages and automatic processing of installed dependents are disabled. A manager can still update dependencies required by the selected package.
+
+Pip options that redirect the interpreter, destination, or target set are rejected, while registry configuration is retained. Protected distribution versions are constrained during dependency resolution. npm compares SemVer and installs an exact newer version; aliases, Git origins, and local links are not silently replaced with a registry package.
+
+Go, Cargo, and pip checks have a 60-second overall deadline per manager/runtime. General command execution is limited to 30 minutes. Timeout or cancellation terminates the command's process group; partial changes are not rolled back. Output is available in the session log after the command finishes.
+
+Manager configuration and process environment apply. Finder-launched apps can have a different environment from Terminal. Nonstandard npm/Python paths can be added in source settings; for other managers, launch `dist/apps.app/Contents/MacOS/apps` from Terminal with the intended PATH. Homebrew, uv, and pipx currently use one discovered installation each.
+
+Not included: installing new packages, conda management, project `node_modules`, arbitrary manual binaries, full-disk environment discovery, bulk changes, scheduled updates, rollback, cleanup, or service management.
+
+## Development documentation
+
+- [Architecture and adapter contracts](docs/architecture.md)
+- [Verification evidence and limitations](docs/validation.md)
+- [Agent instructions](AGENTS.md)
+- [Historical specifications and plans](docs/superpowers/README.md)
+- [Screenshot provenance](docs/assets/README.md)
+
+`AppsCoreChecks` is an executable check target, so full Xcode/XCTest is not required. Run `scripts/test.sh` for the suite. Optional inventory inspection reads real manager state without requesting upgrades or uninstalls:
+
+```sh
+scripts/swift-local.sh run AppsCoreChecks --inventory
+```
