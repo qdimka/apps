@@ -34,6 +34,7 @@ struct PackageDetailView: View {
                     metadata("Источник", package.source.title)
                     metadata("Тип", package.kind.title)
                     metadata("Версия", package.version, mono: true)
+                    if let reference = package.packageReference { metadata("Пакет", reference, mono: true) }
                     if let path = package.installationPath { metadata("Расположение", path, mono: true) }
                     if let environment = package.environmentPath { metadata("Окружение", environment, mono: true) }
                     metadata(package.source == .pip ? "Интерпретатор" : "Менеджер", package.managerPath, mono: true)
@@ -132,6 +133,8 @@ struct PackageDetailView: View {
         case .homebrew: "Homebrew проверит зависимости перед удалением."
         case .uv, .pipx: "Будет удалено окружение инструмента вместе с его зависимостями."
         case .npm: "Будет удалена глобальная установка этого npm-пакета в выбранной установке Node.js."
+        case .go: "Один выбранный бинарник будет перемещён в Корзину. Go и кеш модулей останутся."
+        case .cargo: "Cargo удалит команды выбранного crate из указанного каталога установки. Rust и rustup останутся."
         case .pip: "Будет удалён только этот Python-пакет. Окружение и остальные зависимости останутся."
         }
     }

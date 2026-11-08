@@ -23,6 +23,12 @@ struct SourceSettingsView: View {
                     Text("Выберите основную установку Python или окружение проекта. Список pip относится к выбранному интерпретатору.")
                         .font(.caption).foregroundStyle(.secondary)
                 } header: { Text("pip · окружение Python") }
+                Section {
+                    Text(model.cargoRoot).font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
+                    Button("Выбрать каталог Cargo…") { model.chooseCargoRoot() }
+                    Text("Установленные CLI из cargo install. Выберите другой каталог, если используете --root или install.root.")
+                        .font(.caption).foregroundStyle(.secondary)
+                } header: { Text("Rust · Cargo") }
             }
             .formStyle(.grouped)
             .disabled(model.coordinator.isBusy)
@@ -31,7 +37,7 @@ struct SourceSettingsView: View {
                 HStack { ProgressView().controlSize(.small); Text(model.coordinator.activity ?? "Загрузка…").font(.caption).foregroundStyle(.secondary) }
             }
         }
-        .padding(24).frame(width: 720, height: 480)
+        .padding(24).frame(width: 720, height: 620)
     }
 
     @ViewBuilder private func runtimePicker(_ source: PackageSource, choices: [RuntimeChoice], selected: String) -> some View {

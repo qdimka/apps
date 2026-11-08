@@ -4,7 +4,7 @@ public enum ManagerDiscovery {
     public static func defaultSearchPaths() -> [String] {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         var paths = (ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator: ":").map(String.init)
-        paths += [home + "/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", "/opt/anaconda3/bin",
+        paths += [home + "/.local/bin", home + "/.cargo/bin", "/opt/homebrew/bin", "/usr/local/bin", "/opt/anaconda3/bin",
                   home + "/anaconda3/bin", home + "/miniconda3/bin", "/opt/miniconda3/bin", "/usr/bin", "/bin"]
         let python = home + "/Library/Python"
         if let versions = try? FileManager.default.contentsOfDirectory(atPath: python) {
@@ -24,7 +24,7 @@ public enum ManagerDiscovery {
         return nil
     }
 
-    public static func managers(npmPath: String? = nil, pythonPath: String? = nil) -> [any PackageManager] {
+    public static func managers(npmPath: String? = nil, pythonPath: String? = nil, cargoRoot: String? = nil) -> [any PackageManager] {
         PackageSource.allCases.compactMap { source in
             let candidate: URL?
             switch source {
@@ -39,6 +39,8 @@ public enum ManagerDiscovery {
             case .pipx: return PipxManager(executable: url)
             case .npm: return NPMManager(executable: url)
             case .pip: return PipManager(executable: url)
+            case .go: return GoManager(executable: url)
+            case .cargo: return CargoManager(executable: url, root: cargoRoot.map { URL(fileURLWithPath: $0) })
             }
         }
     }

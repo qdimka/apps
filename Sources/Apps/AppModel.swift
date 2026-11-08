@@ -13,9 +13,8 @@ final class AppModel {
     private(set) var npmChoices: [RuntimeChoice]
     private(set) var pythonChoices: [RuntimeChoice]
     var settingsError: String?
-    var sourceKey: String {
-        didSet { UserDefaults.standard.set(sourceKey, forKey: "selectedSource") }
-    }
+    var sourceKey = "all"
+    private(set) var cargoRoot: String
     var updatesOnly: Bool {
         didSet { UserDefaults.standard.set(updatesOnly, forKey: "updatesOnly") }
     }
@@ -31,10 +30,11 @@ final class AppModel {
         let npm = defaults.string(forKey: "npmExecutable") ?? RuntimeDiscovery.npmChoices().first?.path ?? ""
         let python = defaults.string(forKey: "pythonExecutable") ?? RuntimeDiscovery.preferredPython()?.path ?? ""
         npmPath = npm; pythonPath = python
+        let cargo = defaults.string(forKey: "cargoInstallRoot") ?? CargoManager.defaultRoot.path
+        cargoRoot = cargo
         npmChoices = Self.includingSaved(RuntimeDiscovery.npmChoices(), paths: (defaults.stringArray(forKey: "extraNpmExecutables") ?? []) + [npm])
         pythonChoices = Self.includingSaved(RuntimeDiscovery.pythonChoices(), paths: (defaults.stringArray(forKey: "extraPythonExecutables") ?? []) + [python])
-        coordinator = PackageCoordinator(managers: ManagerDiscovery.managers(npmPath: npm.isEmpty ? nil : npm, pythonPath: python.isEmpty ? nil : python))
-        sourceKey = UserDefaults.standard.string(forKey: "selectedSource") ?? "all"
+        coordinator = PackageCoordinator(managers: ManagerDiscovery.managers(npmPath: npm.isEmpty ? nil : npm, pythonPath: python.isEmpty ? nil : python, cargoRoot: cargo))
         updatesOnly = UserDefaults.standard.bool(forKey: "updatesOnly")
     }
 
@@ -69,6 +69,21 @@ final class AppModel {
         if source == .npm { npmChoices = Self.includingSaved(npmChoices, paths: [chosen.path]) }
         else { pythonChoices = Self.includingSaved(pythonChoices, paths: [chosen.path]) }
         Task { await selectRuntime(source, path: chosen.path) }
+    }
+
+    func chooseCargoRoot() {
+        guard !coordinator.isBusy else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false
+        panel.message = "Выберите каталог установки Cargo, содержащий bin и .crates2.json."
+        panel.prompt = "Выбрать"
+        guard panel.runModal() == .OK, let root = panel.url else { return }
+        guard let executable = ManagerDiscovery.find(.cargo) else { settingsError = "Cargo не найден."; return }
+        Task {
+            guard await coordinator.replaceManager(source: .cargo, manager: CargoManager(executable: executable, root: root)) else { return }
+            cargoRoot = root.path; UserDefaults.standard.set(root.path, forKey: "cargoInstallRoot")
+            settingsError = nil; reconcileSelection()
+        }
     }
 
     private static func includingSaved(_ choices: [RuntimeChoice], paths: [String]) -> [RuntimeChoice] {

@@ -3,10 +3,10 @@ import AppsCore
 
 extension PackageSource {
     var symbol: String {
-        switch self { case .homebrew: "shippingbox"; case .uv: "bolt.fill"; case .pipx: "cube.transparent"; case .npm: "curlybraces.square"; case .pip: "cube.box" }
+        switch self { case .homebrew: "shippingbox"; case .uv: "bolt.fill"; case .pipx: "cube.transparent"; case .npm: "curlybraces.square"; case .pip: "cube.box"; case .go: "terminal"; case .cargo: "shippingbox.fill" }
     }
     var color: Color {
-        switch self { case .homebrew: .orange; case .uv: .purple; case .pipx: .teal; case .npm: .red; case .pip: .blue }
+        switch self { case .homebrew: .orange; case .uv: .purple; case .pipx: .teal; case .npm: .red; case .pip: .blue; case .go: .cyan; case .cargo: .brown }
     }
 }
 
@@ -14,14 +14,12 @@ struct ContentView: View {
     @Bindable var model: AppModel
     @State private var showLog = false
     @State private var showSettings = false
+    @State private var showSources = false
 
     var body: some View {
         NavigationSplitView {
-            sidebar
-                .navigationSplitViewColumnWidth(min: 175, ideal: 200, max: 260)
-        } content: {
             packageList
-                .navigationSplitViewColumnWidth(min: 320, ideal: 430, max: 600)
+                .navigationSplitViewColumnWidth(min: 380, ideal: 480, max: 700)
         } detail: {
             if let package = model.selectedPackage {
                 PackageDetailView(package: package, model: model)
@@ -50,11 +48,11 @@ struct ContentView: View {
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(model.coordinator.isBusy)
-                .help("Проверить обновления npm/pip и локальный каталог Homebrew без установки пакетов")
+                .help("Проверить новые версии пакетов без установки")
                 Button { showLog = true } label: { Label("Журнал", systemImage: "terminal") }
                     .help("Журнал операций")
                 Button { showSettings = true } label: { Label("Источники", systemImage: "slider.horizontal.3") }
-                    .help("Выбрать npm и Python-окружение").disabled(model.coordinator.isBusy)
+                    .help("Настроить окружения и каталог Cargo").disabled(model.coordinator.isBusy)
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { statusBar }
@@ -66,38 +64,25 @@ struct ContentView: View {
         .onChange(of: model.updatesOnly) { model.reconcileSelection() }
     }
 
-    private var sidebar: some View {
-        VStack(spacing: 0) {
-            List(selection: $model.sourceKey) {
-                Section {
+    private var sourceStatus: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Состояние источников").font(.headline)
+            ForEach(PackageSource.allCases) { source in
+                VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Label("Все пакеты", systemImage: "square.stack.3d.up")
+                        Label(source.title, systemImage: source.symbol).foregroundStyle(source.color)
                         Spacer()
-                        Text("\(model.coordinator.packages.count)").foregroundStyle(.secondary).monospacedDigit()
-                    }.tag("all")
-                }
-                Section("Источники") {
-                    ForEach(PackageSource.allCases) { source in
-                        HStack(spacing: 10) {
-                            Image(systemName: source.symbol).foregroundStyle(source.color).frame(width: 16)
-                            Text(source.title)
-                            Spacer(minLength: 0)
-                            sourceAccessory(source)
+                        sourceAccessory(source)
+                    }
+                    if let state = model.coordinator.sourceStates[source] {
+                        Text(state.managerPath ?? "Менеджер не найден").font(.system(size: 10, design: .monospaced))
+                        if state.phase == .failed || state.phase == .missing {
+                            Text(state.message).font(.caption).foregroundStyle(.secondary)
                         }
-                        .tag(source.rawValue)
-                        .help(model.coordinator.sourceStates[source]?.managerPath ?? "Менеджер не найден")
                     }
                 }
             }
-            Spacer(minLength: 0)
-            VStack(alignment: .leading, spacing: 5) {
-                Text("apps").font(.system(size: 16, weight: .semibold))
-                Text("Ваши инструменты на Mac")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(18)
-        }
+        }.padding(20).frame(width: 400)
     }
 
     @ViewBuilder private func sourceAccessory(_ source: PackageSource) -> some View {
@@ -116,7 +101,7 @@ struct ContentView: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(model.selectedSource?.title ?? "Пакеты")
+                    Text("Пакеты")
                         .font(.system(size: 26, weight: .bold, design: .rounded))
                     Spacer()
                     Text("\(model.visiblePackages.count)").font(.title3).foregroundStyle(.secondary).monospacedDigit()
@@ -129,12 +114,16 @@ struct ContentView: View {
                         .help("Только пакеты с найденным обновлением")
                         .accessibilityLabel("Только с обновлениями")
                 }
-                if model.selectedSource == .npm || model.selectedSource == .pip {
-                    Button { showSettings = true } label: {
-                        Label(model.selectedSource == .pip ? model.pythonPath : model.npmPath, systemImage: "folder")
-                            .font(.system(size: 10, design: .monospaced)).lineLimit(2).multilineTextAlignment(.leading)
-                    }.buttonStyle(.link).disabled(model.coordinator.isBusy)
+                HStack(spacing: 12) {
+                    Picker("Источник", selection: $model.sourceKey) {
+                        Text("Все источники").tag("all")
+                        ForEach(PackageSource.allCases) { source in Text(source.title).tag(source.rawValue) }
+                    }.labelsHidden().accessibilityLabel("Фильтр по источнику")
+                    Button { showSources.toggle() } label: { Image(systemName: "info.circle") }
+                        .buttonStyle(.plain).help("Состояние источников")
+                        .popover(isPresented: $showSources) { sourceStatus }
                 }
+
             }.padding(20)
             Divider()
             if let source = model.selectedSource, let state = model.coordinator.sourceStates[source], state.phase == .failed || state.phase == .missing {
@@ -185,7 +174,7 @@ struct ContentView: View {
                 } else {
                     let failures = model.coordinator.sourceStates.values.filter { $0.phase == .failed }.count
                     Image(systemName: failures > 0 ? "exclamationmark.circle" : "internaldrive")
-                    Text(failures > 0 ? "Источников с ошибкой: \(failures). Выберите источник для подробностей." : "\(model.coordinator.packages.count) пакетов")
+                    Text(failures > 0 ? "Источников с ошибкой: \(failures). Откройте состояние источников над списком." : "\(model.coordinator.packages.count) пакетов")
                 }
                 Spacer()
                 if let date = model.coordinator.lastLoadedAt {
@@ -210,7 +199,13 @@ private struct PackageRow: View {
                 .frame(width: 32, height: 32)
                 .background(package.source.color.opacity(0.09), in: RoundedRectangle(cornerRadius: 8))
             VStack(alignment: .leading, spacing: 4) {
-                Text(package.name).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(package.name).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                    Text(package.source.title).font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(package.source.color)
+                        .padding(.horizontal, 5).padding(.vertical, 2)
+                        .background(package.source.color.opacity(0.1), in: RoundedRectangle(cornerRadius: 4))
+                }
                 Text(package.summary.isEmpty ? package.kind.title : package.summary)
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
@@ -223,8 +218,6 @@ private struct PackageRow: View {
                     Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.secondary)
                 } else if package.upgradeRestriction != nil || package.removalRestriction != nil {
                     Image(systemName: "lock").font(.caption2).foregroundStyle(.secondary).accessibilityLabel("Операции ограничены")
-                } else {
-                    Text(package.source.title).font(.system(size: 10)).foregroundStyle(.secondary)
                 }
             }
         }
