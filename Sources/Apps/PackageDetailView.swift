@@ -20,11 +20,14 @@ struct PackageDetailView: View {
                         Label("Обновить", systemImage: "arrow.down.circle")
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(!canModify || package.pinned)
+                    .disabled(!canModify || package.pinned || package.upgradeRestriction != nil)
                     Button(role: .destructive) { confirmDeletion = true } label: {
                         Label("Удалить", systemImage: "trash")
-                    }.disabled(!canModify)
+                    }.disabled(!canModify || package.removalRestriction != nil)
                 }.controlSize(.large)
+                ForEach(Array(Set([package.upgradeRestriction, package.removalRestriction].compactMap { $0 })).sorted(), id: \.self) { reason in
+                    Label(reason, systemImage: "info.circle").font(.caption).foregroundStyle(.secondary)
+                }
                 Divider()
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Установка").font(.headline)
@@ -32,7 +35,8 @@ struct PackageDetailView: View {
                     metadata("Тип", package.kind.title)
                     metadata("Версия", package.version, mono: true)
                     if let path = package.installationPath { metadata("Расположение", path, mono: true) }
-                    metadata("Менеджер", package.managerPath, mono: true)
+                    if let environment = package.environmentPath { metadata("Окружение", environment, mono: true) }
+                    metadata(package.source == .pip ? "Интерпретатор" : "Менеджер", package.managerPath, mono: true)
                 }
                 if !package.executables.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
@@ -69,8 +73,8 @@ struct PackageDetailView: View {
                 Task { await model.mutate(package.id, action: .uninstall) }
             }
         } message: {
-            Text("\(package.name) \(package.version)\nИсточник: \(package.source.title)\n\n" +
-                 (package.source == .homebrew ? "Homebrew проверит зависимости перед удалением." : "Будет удалено окружение инструмента вместе с его зависимостями."))
+            Text("\(package.name) \(package.version)\nИсточник: \(package.source.title)\n" +
+                 (package.environmentPath.map { "Окружение: \($0)\n" } ?? "") + "\n" + removalExplanation)
         }
     }
 
@@ -99,13 +103,13 @@ struct PackageDetailView: View {
             if package.updateStatus == .available, let latest = package.latestVersion {
                 Text("\(package.version) → \(latest)").font(.system(size: 12, design: .monospaced))
             }
-            if package.source != .homebrew {
+            if package.source == .uv || package.source == .pipx {
                 Text("Проверка новой версии пока недоступна. «Обновить» запустит штатное обновление этого инструмента.")
                     .font(.caption).foregroundStyle(.secondary)
             } else if package.updateStatus == .notChecked {
                 Text("Нажмите «Проверить обновления» на панели инструментов.")
                     .font(.caption).foregroundStyle(.secondary)
-            } else if package.updateStatus == .unsupported {
+            } else if package.source == .homebrew && package.updateStatus == .unsupported {
                 Text("Свежесть каталога Homebrew не подтверждена. Отсутствие найденного обновления не означает, что версия последняя.")
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -116,6 +120,15 @@ struct PackageDetailView: View {
             if package.pinned {
                 Label("Версия закреплена в менеджере", systemImage: "pin.fill").font(.caption).foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private var removalExplanation: String {
+        switch package.source {
+        case .homebrew: "Homebrew проверит зависимости перед удалением."
+        case .uv, .pipx: "Будет удалено окружение инструмента вместе с его зависимостями."
+        case .npm: "Будет удалена глобальная установка этого npm-пакета в выбранной установке Node.js."
+        case .pip: "Будет удалён только этот Python-пакет. Окружение и остальные зависимости останутся."
         }
     }
 

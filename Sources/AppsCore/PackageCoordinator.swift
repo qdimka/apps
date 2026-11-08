@@ -28,7 +28,7 @@ public final class PackageCoordinator {
     public private(set) var log = ""
     public private(set) var notice: OperationNotice?
     public private(set) var lastLoadedAt: Date?
-    @ObservationIgnored private let managers: [any PackageManager]
+    @ObservationIgnored private var managers: [any PackageManager]
 
     public init(managers: [any PackageManager]) {
         self.managers = managers
@@ -43,6 +43,22 @@ public final class PackageCoordinator {
 
     public func reload() async { await loadAll(check: false) }
     public func checkUpdates() async { await loadAll(check: true) }
+
+    public func replaceManager(source: PackageSource, manager: (any PackageManager)?) async -> Bool {
+        guard !isBusy, manager == nil || manager?.source == source else { return false }
+        isBusy = true; notice = nil; activity = "Выбор окружения: " + source.title
+        defer { isBusy = false; activity = nil }
+        managers.removeAll { $0.source == source }
+        packages.removeAll { $0.source == source }
+        if let manager {
+            managers.append(manager)
+            await refresh(manager, check: false)
+        } else {
+            sourceStates[source] = .init(phase: .missing, message: "Выберите установку этого источника.")
+        }
+        lastLoadedAt = Date()
+        return true
+    }
 
     private func loadAll(check: Bool) async {
         guard !isBusy else { return }
@@ -59,7 +75,7 @@ public final class PackageCoordinator {
         if check {
             let failed = sourceStates.filter { $0.value.phase == .failed }.map { $0.key.title }.sorted()
             notice = failed.isEmpty
-                ? .init(message: "Проверка завершена по локальным данным. Свежесть каталога Homebrew не подтверждена; новые версии uv/pipx не проверяются.", isError: false)
+                ? .init(message: "Проверка завершена. npm/pip используют настроенные реестры; Homebrew — локальный каталог. Новые версии uv/pipx не проверяются.", isError: false)
                 : .init(message: "Не удалось проверить: \(failed.joined(separator: ", ")). Их статусы обновлений сброшены.", isError: true)
         }
     }
@@ -97,6 +113,10 @@ public final class PackageCoordinator {
         }
         if action == .upgrade && package.pinned {
             notice = .init(message: "Версия пакета закреплена в менеджере. Сначала снимите закрепление.", isError: true)
+            return
+        }
+        if let reason = action == .upgrade ? package.upgradeRestriction : package.removalRestriction {
+            notice = .init(message: reason, isError: true)
             return
         }
         isBusy = true; notice = nil

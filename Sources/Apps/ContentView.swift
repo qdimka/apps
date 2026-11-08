@@ -3,16 +3,17 @@ import AppsCore
 
 extension PackageSource {
     var symbol: String {
-        switch self { case .homebrew: "shippingbox"; case .uv: "bolt.fill"; case .pipx: "cube.transparent" }
+        switch self { case .homebrew: "shippingbox"; case .uv: "bolt.fill"; case .pipx: "cube.transparent"; case .npm: "curlybraces.square"; case .pip: "cube.box" }
     }
     var color: Color {
-        switch self { case .homebrew: .orange; case .uv: .purple; case .pipx: .teal }
+        switch self { case .homebrew: .orange; case .uv: .purple; case .pipx: .teal; case .npm: .red; case .pip: .blue }
     }
 }
 
 struct ContentView: View {
     @Bindable var model: AppModel
     @State private var showLog = false
+    @State private var showSettings = false
 
     var body: some View {
         NavigationSplitView {
@@ -49,13 +50,16 @@ struct ContentView: View {
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(model.coordinator.isBusy)
-                .help("Проверить локальный каталог Homebrew без изменения установок")
+                .help("Проверить обновления npm/pip и локальный каталог Homebrew без установки пакетов")
                 Button { showLog = true } label: { Label("Журнал", systemImage: "terminal") }
                     .help("Журнал операций")
+                Button { showSettings = true } label: { Label("Источники", systemImage: "slider.horizontal.3") }
+                    .help("Выбрать npm и Python-окружение").disabled(model.coordinator.isBusy)
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { statusBar }
         .sheet(isPresented: $showLog) { LogView(log: model.coordinator.log) }
+        .sheet(isPresented: $showSettings) { SourceSettingsView(model: model) }
         .task { await model.reload() }
         .onChange(of: model.sourceKey) { model.reconcileSelection() }
         .onChange(of: model.searchText) { model.reconcileSelection() }
@@ -67,7 +71,7 @@ struct ContentView: View {
             List(selection: $model.sourceKey) {
                 Section {
                     HStack {
-                        Label("Все инструменты", systemImage: "square.stack.3d.up")
+                        Label("Все пакеты", systemImage: "square.stack.3d.up")
                         Spacer()
                         Text("\(model.coordinator.packages.count)").foregroundStyle(.secondary).monospacedDigit()
                     }.tag("all")
@@ -112,7 +116,7 @@ struct ContentView: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(model.selectedSource?.title ?? "Инструменты")
+                    Text(model.selectedSource?.title ?? "Пакеты")
                         .font(.system(size: 26, weight: .bold, design: .rounded))
                     Spacer()
                     Text("\(model.visiblePackages.count)").font(.title3).foregroundStyle(.secondary).monospacedDigit()
@@ -124,6 +128,12 @@ struct ContentView: View {
                         .toggleStyle(.button).controlSize(.small)
                         .help("Только пакеты с найденным обновлением")
                         .accessibilityLabel("Только с обновлениями")
+                }
+                if model.selectedSource == .npm || model.selectedSource == .pip {
+                    Button { showSettings = true } label: {
+                        Label(model.selectedSource == .pip ? model.pythonPath : model.npmPath, systemImage: "folder")
+                            .font(.system(size: 10, design: .monospaced)).lineLimit(2).multilineTextAlignment(.leading)
+                    }.buttonStyle(.link).disabled(model.coordinator.isBusy)
                 }
             }.padding(20)
             Divider()
@@ -153,6 +163,9 @@ struct ContentView: View {
         } description: {
             Text(state.message).textSelection(.enabled)
         } actions: {
+            if source == .npm || source == .pip {
+                Button("Выбрать установку…") { showSettings = true }.disabled(model.coordinator.isBusy)
+            }
             if state.phase == .failed {
                 Button("Повторить") { Task { await model.reload() } }.disabled(model.coordinator.isBusy)
             }
@@ -208,6 +221,8 @@ private struct PackageRow: View {
                     Label("Обновление", systemImage: "arrow.down.circle.fill").font(.system(size: 10)).foregroundStyle(.blue)
                 } else if package.pinned {
                     Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.secondary)
+                } else if package.upgradeRestriction != nil || package.removalRestriction != nil {
+                    Image(systemName: "lock").font(.caption2).foregroundStyle(.secondary).accessibilityLabel("Операции ограничены")
                 } else {
                     Text(package.source.title).font(.system(size: 10)).foregroundStyle(.secondary)
                 }
