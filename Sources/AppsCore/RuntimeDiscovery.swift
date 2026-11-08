@@ -53,6 +53,7 @@ public enum RuntimeDiscovery {
         var candidates: [URL] = []
         if let preferred = preferredPython(searchPaths: paths, home: home) { candidates.append(preferred) }
         candidates += pythonURLs(paths: paths, home: home)
+        candidates += projectPythons(home: home)
         return unique(candidates, preserveVenv: true)
     }
 
@@ -77,6 +78,35 @@ public enum RuntimeDiscovery {
                 .filter { $0.hasPrefix("/") }.map { URL(fileURLWithPath: $0).appendingPathComponent("bin/python") }
         }
         return urls
+    }
+
+    // Bound traversal to development directories; never recurse through an env, dependency tree or symlink.
+    private static func projectPythons(home: URL) -> [URL] {
+        let roots = ["Documents/Repositories", "Projects", "Developer", "code", ".virtualenvs", ".local/share/virtualenvs", ".pyenv/versions"]
+        let ignored: Set<String> = ["node_modules", ".git", ".build", "build", "dist", "target", "Library", "site-packages", "__pycache__"]
+        var queue = roots.map { (home.appendingPathComponent($0), 0) }, index = 0, result: [URL] = []
+        while index < queue.count && index < 2500 && result.count < 150 {
+            let (directory, depth) = queue[index]; index += 1
+            guard let values = try? directory.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]), values.isDirectory == true, values.isSymbolicLink != true else { continue }
+            if FileManager.default.fileExists(atPath: directory.appendingPathComponent("pyvenv.cfg").path) || FileManager.default.fileExists(atPath: directory.appendingPathComponent("conda-meta").path) {
+                if let python = resolvePythonSelection(directory) { result.append(python) }
+                continue
+            }
+            guard depth < 5, let children = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey]) else { continue }
+            for child in children.sorted(by: { $0.path < $1.path }) where !ignored.contains(child.lastPathComponent) && (!child.lastPathComponent.hasPrefix(".") || child.lastPathComponent == ".venv") {
+                queue.append((child, depth + 1))
+            }
+        }
+        return result
+    }
+
+    public static func includingSaved(_ choices: [RuntimeChoice], paths: [String], python: Bool) -> [RuntimeChoice] {
+        let existing = unique(choices.map { URL(fileURLWithPath: $0.path) } + paths.filter { $0.hasPrefix("/") }.map { URL(fileURLWithPath: $0) }, preserveVenv: python)
+        var result = existing
+        for path in paths where path.hasPrefix("/") && !isExecutable(URL(fileURLWithPath: path)) && !result.contains(where: { $0.path == path }) {
+            result.append(RuntimeChoice(path: path, label: path + " (недоступен)"))
+        }
+        return result
     }
 
     private static func unique(_ urls: [URL], preserveVenv: Bool = false) -> [RuntimeChoice] {

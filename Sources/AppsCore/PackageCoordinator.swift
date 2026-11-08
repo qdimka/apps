@@ -22,6 +22,7 @@ public struct OperationNotice: Sendable {
 @Observable @MainActor
 public final class PackageCoordinator {
     public private(set) var packages: [PackageRecord] = []
+    public private(set) var runtimeStates: [String: SourceState] = [:]
     public private(set) var sourceStates: [PackageSource: SourceState] = [:]
     public private(set) var isBusy = false
     public private(set) var activity: String?
@@ -31,7 +32,9 @@ public final class PackageCoordinator {
     @ObservationIgnored private var managers: [any PackageManager]
 
     public init(managers: [any PackageManager]) {
-        self.managers = managers
+        var seen = Set<String>()
+        self.managers = managers.filter { seen.insert(Self.runtimeKey($0.source, $0.executable.path)).inserted }
+        for manager in self.managers { runtimeStates[Self.runtimeKey(manager.source, manager.executable.path)] = .init(phase: .loading, message: "Ожидает загрузки", managerPath: manager.executable.path) }
         for source in PackageSource.allCases {
             if let manager = managers.first(where: { $0.source == source }) {
                 sourceStates[source] = .init(phase: .loading, message: "Ожидает загрузки", managerPath: manager.executable.path)
@@ -44,20 +47,48 @@ public final class PackageCoordinator {
     public func reload() async { await loadAll(check: false) }
     public func checkUpdates() async { await loadAll(check: true) }
 
-    public func replaceManager(source: PackageSource, manager: (any PackageManager)?) async -> Bool {
-        guard !isBusy, manager == nil || manager?.source == source else { return false }
-        isBusy = true; notice = nil; activity = "Выбор окружения: " + source.title
-        defer { isBusy = false; activity = nil }
-        managers.removeAll { $0.source == source }
-        packages.removeAll { $0.source == source }
-        if let manager {
-            managers.append(manager)
-            await refresh(manager, check: false)
-        } else {
-            sourceStates[source] = .init(phase: .missing, message: "Выберите установку этого источника.")
+    public static func runtimeKey(_ source: PackageSource, _ path: String) -> String { source.rawValue + "|" + path }
+
+    public func canModify(_ package: PackageRecord) -> Bool {
+        !isBusy && runtimeStates[Self.runtimeKey(package.source, package.managerPath)]?.phase == .ready
+    }
+
+    @discardableResult public func configureManagers(source: PackageSource, replacements: [any PackageManager]) -> Bool {
+        guard !isBusy, replacements.allSatisfy({ $0.source == source }) else { return false }
+        var seen = Set<String>()
+        let unique = replacements.filter { seen.insert($0.executable.path).inserted }
+        let paths = Set(unique.map { $0.executable.path })
+        managers.removeAll { $0.source == source }; managers += unique
+        packages.removeAll { $0.source == source && !paths.contains($0.managerPath) }
+        runtimeStates = runtimeStates.filter { !$0.key.hasPrefix(source.rawValue + "|") || paths.contains($0.value.managerPath ?? "") }
+        for manager in unique {
+            let key = Self.runtimeKey(source, manager.executable.path)
+            if runtimeStates[key] == nil { runtimeStates[key] = .init(phase: .loading, message: "Ожидает загрузки", managerPath: manager.executable.path) }
         }
+        aggregate(source)
+        return true
+    }
+
+    public func replaceManager(source: PackageSource, manager: (any PackageManager)?) async -> Bool {
+        guard configureManagers(source: source, replacements: manager.map { [$0] } ?? []) else { return false }
+        isBusy = true; notice = nil; activity = "Чтение источника: " + source.title
+        defer { isBusy = false; activity = nil }
+        if let manager { await refresh(manager, check: false) }
         lastLoadedAt = Date()
         return true
+    }
+
+    private func aggregate(_ source: PackageSource) {
+        let states = managers.filter { $0.source == source }.compactMap { runtimeStates[Self.runtimeKey(source, $0.executable.path)] }
+        guard !states.isEmpty else {
+            sourceStates[source] = .init(phase: .missing, message: "Менеджер не найден. Добавьте установку или проверьте её расположение.")
+            return
+        }
+        let failed = states.filter { $0.phase == .failed }
+        let phase: SourcePhase = states.contains { $0.phase == .loading } ? .loading : failed.isEmpty ? .ready : .failed
+        let message = failed.isEmpty ? "\(packages.filter { $0.source == source }.count) пакетов · \(states.count) окружений" : failed.map { ($0.managerPath ?? "") + "\n" + $0.message }.joined(separator: "\n\n")
+        sourceStates[source] = .init(phase: phase, message: message, managerPath: states.count == 1 ? states[0].managerPath : nil,
+            checkedAt: states.compactMap(\.checkedAt).max())
     }
 
     private func loadAll(check: Bool) async {
@@ -82,22 +113,26 @@ public final class PackageCoordinator {
 
     @discardableResult private func refresh(_ manager: any PackageManager, check: Bool) async -> Bool {
         let source = manager.source
-        sourceStates[source] = .init(phase: .loading, message: "Загрузка…", managerPath: manager.executable.path)
+        let key = Self.runtimeKey(source, manager.executable.path)
+        runtimeStates[key] = .init(phase: .loading, message: "Загрузка…", managerPath: manager.executable.path)
+        aggregate(source)
         do {
             let rows = try await (check ? manager.checkUpdates() : manager.list())
             packages.removeAll { $0.source == source && $0.managerPath == manager.executable.path }
             packages += rows
             packages.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-            sourceStates[source] = .init(phase: .ready, message: "\(rows.count) пакетов", managerPath: manager.executable.path,
+            runtimeStates[key] = .init(phase: .ready, message: "\(rows.count) пакетов", managerPath: manager.executable.path,
                                         checkedAt: check && source == .homebrew ? Date() : nil)
+            aggregate(source)
             return true
         } catch {
-            for index in packages.indices where packages[index].source == source {
+            for index in packages.indices where packages[index].source == source && packages[index].managerPath == manager.executable.path {
                 packages[index].updateStatus = .notChecked
                 packages[index].latestVersion = nil
             }
             let message = shortError(error)
-            sourceStates[source] = .init(phase: .failed, message: message, managerPath: manager.executable.path)
+            runtimeStates[key] = .init(phase: .failed, message: message, managerPath: manager.executable.path)
+            aggregate(source)
             appendLog("\(source.title): \(message)")
             return false
         }
@@ -107,7 +142,7 @@ public final class PackageCoordinator {
         guard !isBusy else { return }
         guard let package = packages.first(where: { $0.id == id }),
               let manager = managers.first(where: { $0.source == package.source && $0.executable.path == package.managerPath }),
-              sourceStates[package.source]?.phase == .ready else {
+              runtimeStates[Self.runtimeKey(package.source, package.managerPath)]?.phase == .ready else {
             notice = .init(message: "Сначала обновите список этого источника.", isError: true)
             return
         }
@@ -166,10 +201,10 @@ public final class PackageCoordinator {
 }
 
 public enum PackageQuery {
-    public static func filter(_ packages: [PackageRecord], source: PackageSource?, search: String, updatesOnly: Bool) -> [PackageRecord] {
+    public static func filter(_ packages: [PackageRecord], source: PackageSource?, search: String, updatesOnly: Bool, managerPath: String? = nil) -> [PackageRecord] {
         let search = search.trimmingCharacters(in: .whitespacesAndNewlines)
         return packages.filter { row in
-            (source == nil || row.source == source) && (!updatesOnly || row.updateStatus == .available) &&
+            (source == nil || row.source == source) && (managerPath == nil || row.managerPath == managerPath) && (!updatesOnly || row.updateStatus == .available) &&
             (search.isEmpty || row.name.localizedCaseInsensitiveContains(search) || row.summary.localizedCaseInsensitiveContains(search))
         }
     }

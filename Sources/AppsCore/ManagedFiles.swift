@@ -32,3 +32,12 @@ extension PackageManager {
         return try result.requireSuccess()
     }
 }
+
+func withOperationDeadline<T: Sendable>(_ timeout: Duration, operation: @escaping @Sendable () async throws -> T) async throws -> T {
+    try await withThrowingTaskGroup(of: T.self) { group in
+        group.addTask { try await operation() }
+        group.addTask { try await Task.sleep(for: timeout); throw CommandError.timedOut }
+        defer { group.cancelAll() }
+        return try await group.next()!
+    }
+}

@@ -3,14 +3,15 @@ import Foundation
 public struct CargoManager: PackageManager {
     public let source = PackageSource.cargo
     public let executable: URL
+    public let checkTimeout: Duration
     public let runner: any CommandRunning
     public let root: URL
     public static var defaultRoot: URL {
         let env = ProcessInfo.processInfo.environment
         return URL(fileURLWithPath: env["CARGO_INSTALL_ROOT"] ?? env["CARGO_HOME"] ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".cargo").path)
     }
-    public init(executable: URL, root: URL? = nil, runner: any CommandRunning = CommandRunner()) {
-        self.executable = executable; self.root = (root ?? Self.defaultRoot).standardizedFileURL; self.runner = runner
+    public init(executable: URL, root: URL? = nil, runner: any CommandRunning = CommandRunner(), checkTimeout: Duration = .seconds(60)) {
+        self.checkTimeout = checkTimeout; self.executable = executable; self.root = (root ?? Self.defaultRoot).standardizedFileURL; self.runner = runner
     }
     public func list() async throws -> [PackageRecord] {
         let file = root.appendingPathComponent(".crates2.json")
@@ -83,6 +84,9 @@ public struct CargoManager: PackageManager {
         throw ManagerError.invalidData("Cargo search: точный пакет не найден")
     }
     public func checkUpdates() async throws -> [PackageRecord] {
+        try await withOperationDeadline(checkTimeout) { try await checkedRows() }
+    }
+    private func checkedRows() async throws -> [PackageRecord] {
         var rows = try await list()
         for i in rows.indices {
             if rows[i].upgradeRestriction != nil { rows[i].updateStatus = .unsupported; continue }

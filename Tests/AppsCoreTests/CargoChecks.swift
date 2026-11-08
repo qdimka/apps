@@ -11,6 +11,12 @@ enum CargoChecks {
         return root
     }
     static var all: [Check] { [
+        Check(name: "Cargo check has an overall cancellable deadline") {
+            let root = try fixture(); defer { try? FileManager.default.removeItem(at: root) }
+            let manager = CargoManager(executable: cargo, root: root, runner: SlowRegistryRunner(), checkTimeout: .milliseconds(25))
+            do { _ = try await manager.checkUpdates(); throw CheckFailure(description: "Deadline ignored") }
+            catch { try expectEqual(error as? CommandError, .timedOut) }
+        },
         Check(name: "Cargo legacy inventory stays visible with restricted operations") {
             let root = try GoChecks.fixture(); defer { try? FileManager.default.removeItem(at: root) }
             try Data("[v1]".utf8).write(to: root.appendingPathComponent(".crates.toml"))
@@ -87,4 +93,11 @@ enum CargoChecks {
             try expectEqual(await runner.calls().count, 1)
         }
     ] }
+}
+
+struct SlowRegistryRunner: CommandRunning {
+    func run(executable: URL, arguments: [String]) async throws -> CommandResult {
+        try await Task.sleep(for: .seconds(2))
+        return .init(exitCode: 0, stdout: "tool = \"2.0.0\"")
+    }
 }

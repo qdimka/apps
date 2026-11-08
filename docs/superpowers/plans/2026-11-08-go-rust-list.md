@@ -42,7 +42,9 @@
 - [ ] Реализовать Cargo list/check/upgrade/uninstall с точным root, сохранением параметров и deadline.
 - [ ] GREEN, реальная инвентаризация только чтением, коммит.
 
-### Task 3: Общий список
+### Task 3: Общий список (superseded by user clarification)
+
+See 2026-11-08-environment-inventory.md: restore sidebar and filter runtime environments.
 
 **Files:** Sources/Apps/{ContentView,AppModel,PackageDetailView,SourceSettingsView}.swift; Tests/AppsCoreTests/CoordinatorChecks.swift; Resources/Info.plist; README.md; docs/validation.md.
 **Interfaces:** sourceKey изначально all, верхний Picker; настройки cargoRoot через replaceManager; общий PackageQuery по всем источникам.

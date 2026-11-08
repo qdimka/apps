@@ -22,7 +22,7 @@ struct Check {
     static func main() async {
         if CommandLine.arguments.contains("--inventory") {
             var failures = 0
-            for manager in ManagerDiscovery.managers() {
+            for manager in ManagerDiscovery.environmentManagers(npm: RuntimeDiscovery.npmChoices(), python: RuntimeDiscovery.pythonChoices()) {
                 do {
                     let rows = try await manager.list()
                     print("\(manager.source.title): \(rows.count) packages; \(manager.executable.path)")
@@ -31,7 +31,7 @@ struct Check {
             if failures > 0 { exit(1) }
             return
         }
-        let checks = CommandRunnerChecks.all + ManagerChecks.all + CoordinatorChecks.all + NPMChecks.all + PipChecks.all + RuntimeChecks.all + GoChecks.all + CargoChecks.all
+        let checks = CommandRunnerChecks.all + ManagerChecks.all + CoordinatorChecks.all + NPMChecks.all + PipChecks.all + RuntimeChecks.all + GoChecks.all + CargoChecks.all + EnvironmentChecks.all
         var failures = 0
         for check in checks {
             do { try await check.run(); print("PASS \(check.name)") }

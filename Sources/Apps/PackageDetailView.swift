@@ -7,7 +7,7 @@ struct PackageDetailView: View {
     @State private var confirmDeletion = false
     @State private var showLog = false
     private var canModify: Bool {
-        !model.coordinator.isBusy && model.coordinator.sourceStates[package.source]?.phase == .ready
+        model.coordinator.canModify(package)
     }
 
     var body: some View {

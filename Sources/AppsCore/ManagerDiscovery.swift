@@ -24,6 +24,11 @@ public enum ManagerDiscovery {
         return nil
     }
 
+    public static func environmentManagers(npm: [RuntimeChoice], python: [RuntimeChoice], cargoRoot: String? = nil) -> [any PackageManager] {
+        let common = managers(cargoRoot: cargoRoot).filter { $0.source != .npm && $0.source != .pip }
+        return common + npm.map { NPMManager(executable: URL(fileURLWithPath: $0.path)) } + python.map { PipManager(executable: URL(fileURLWithPath: $0.path)) }
+    }
+
     public static func managers(npmPath: String? = nil, pythonPath: String? = nil, cargoRoot: String? = nil) -> [any PackageManager] {
         PackageSource.allCases.compactMap { source in
             let candidate: URL?

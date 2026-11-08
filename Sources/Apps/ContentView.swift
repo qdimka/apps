@@ -18,8 +18,10 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
+            sidebar.navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 240)
+        } content: {
             packageList
-                .navigationSplitViewColumnWidth(min: 380, ideal: 480, max: 700)
+                .navigationSplitViewColumnWidth(min: 360, ideal: 440, max: 650)
         } detail: {
             if let package = model.selectedPackage {
                 PackageDetailView(package: package, model: model)
@@ -34,34 +36,57 @@ struct ContentView: View {
         .navigationTitle("apps")
         .toolbar {
             ToolbarItemGroup {
-                if model.coordinator.isBusy {
+                if model.coordinator.isBusy || model.isDiscovering {
                     ProgressView().controlSize(.small).help(model.coordinator.activity ?? "Загрузка")
                 }
                 Button { Task { await model.reload() } } label: {
                     Label("Обновить список", systemImage: "arrow.clockwise")
                 }
                 .keyboardShortcut("r", modifiers: .command)
-                .disabled(model.coordinator.isBusy)
+                .disabled(model.coordinator.isBusy || model.isDiscovering)
                 .help("Перечитать установленные пакеты")
                 Button { Task { await model.checkUpdates() } } label: {
                     Label("Проверить обновления", systemImage: "arrow.down.circle")
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
-                .disabled(model.coordinator.isBusy)
+                .disabled(model.coordinator.isBusy || model.isDiscovering)
                 .help("Проверить новые версии пакетов без установки")
                 Button { showLog = true } label: { Label("Журнал", systemImage: "terminal") }
                     .help("Журнал операций")
                 Button { showSettings = true } label: { Label("Источники", systemImage: "slider.horizontal.3") }
-                    .help("Настроить окружения и каталог Cargo").disabled(model.coordinator.isBusy)
+                    .help("Настроить окружения и каталог Cargo").disabled(model.coordinator.isBusy || model.isDiscovering)
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { statusBar }
         .sheet(isPresented: $showLog) { LogView(log: model.coordinator.log) }
         .sheet(isPresented: $showSettings) { SourceSettingsView(model: model) }
         .task { await model.reload() }
-        .onChange(of: model.sourceKey) { model.reconcileSelection() }
+        .onChange(of: model.sourceKey) { model.environmentKey = "all"; model.reconcileSelection() }
+        .onChange(of: model.environmentKey) { model.reconcileSelection() }
         .onChange(of: model.searchText) { model.reconcileSelection() }
         .onChange(of: model.updatesOnly) { model.reconcileSelection() }
+    }
+
+    private var sidebar: some View {
+        VStack(spacing: 0) {
+            List(selection: $model.sourceKey) {
+                Label("Все пакеты", systemImage: "square.stack.3d.up").tag("all")
+                Section("Источники") {
+                    ForEach(PackageSource.allCases) { source in
+                        HStack(spacing: 10) {
+                            Image(systemName: source.symbol).foregroundStyle(source.color).frame(width: 16)
+                            Text(source.title)
+                            Spacer(minLength: 0)
+                            sourceAccessory(source)
+                        }.tag(source.rawValue)
+                    }
+                }
+            }
+            VStack(alignment: .leading, spacing: 5) {
+                Text("apps").font(.system(size: 16, weight: .semibold))
+                Text("Ваши инструменты на Mac").font(.caption).foregroundStyle(.secondary)
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(18)
+        }
     }
 
     private var sourceStatus: some View {
@@ -75,7 +100,7 @@ struct ContentView: View {
                         sourceAccessory(source)
                     }
                     if let state = model.coordinator.sourceStates[source] {
-                        Text(state.managerPath ?? "Менеджер не найден").font(.system(size: 10, design: .monospaced))
+                        Text(state.managerPath ?? (state.phase == .missing ? "Менеджер не найден" : "Несколько окружений")).font(.system(size: 10, design: .monospaced))
                         if state.phase == .failed || state.phase == .missing {
                             Text(state.message).font(.caption).foregroundStyle(.secondary)
                         }
@@ -101,7 +126,7 @@ struct ContentView: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Пакеты")
+                    Text(model.selectedSource?.title ?? "Пакеты")
                         .font(.system(size: 26, weight: .bold, design: .rounded))
                     Spacer()
                     Text("\(model.visiblePackages.count)").font(.title3).foregroundStyle(.secondary).monospacedDigit()
@@ -115,10 +140,14 @@ struct ContentView: View {
                         .accessibilityLabel("Только с обновлениями")
                 }
                 HStack(spacing: 12) {
-                    Picker("Источник", selection: $model.sourceKey) {
-                        Text("Все источники").tag("all")
-                        ForEach(PackageSource.allCases) { source in Text(source.title).tag(source.rawValue) }
-                    }.labelsHidden().accessibilityLabel("Фильтр по источнику")
+                    if !model.environmentChoices.isEmpty {
+                        Picker("Окружение", selection: $model.environmentKey) {
+                            Text(model.selectedSource == .npm ? "Все установки Node.js" : model.selectedSource == .pip ? "Все Python-окружения" : "Все окружения").tag("all")
+                            ForEach(model.environmentChoices) { choice in
+                                Text(choice.path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~")).tag(choice.path)
+                            }
+                        }.labelsHidden().accessibilityLabel("Фильтр по окружению")
+                    }
                     Button { showSources.toggle() } label: { Image(systemName: "info.circle") }
                         .buttonStyle(.plain).help("Состояние источников")
                         .popover(isPresented: $showSources) { sourceStatus }
@@ -126,7 +155,7 @@ struct ContentView: View {
 
             }.padding(20)
             Divider()
-            if let source = model.selectedSource, let state = model.coordinator.sourceStates[source], state.phase == .failed || state.phase == .missing {
+            if let source = model.selectedSource, let state = model.coordinator.sourceStates[source], (state.phase == .failed || state.phase == .missing) && model.visiblePackages.isEmpty {
                 sourceMessage(source, state)
             } else if model.visiblePackages.isEmpty && !model.coordinator.isBusy {
                 ContentUnavailableView {
@@ -135,6 +164,10 @@ struct ContentView: View {
                     Text(model.updatesOnly ? "Обновления ещё не найдены. Отключите фильтр или запустите проверку." : "Измените поиск или выберите другой источник.")
                 }
             } else {
+                if let source = model.selectedSource, model.coordinator.sourceStates[source]?.phase == .failed {
+                    Label("Некоторые окружения недоступны. Подробности — в состоянии источников.", systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.orange).padding(12)
+                }
                 List(selection: $model.selection) {
                     ForEach(model.visiblePackages) { package in
                         PackageRow(package: package).tag(package.id)
@@ -153,10 +186,10 @@ struct ContentView: View {
             Text(state.message).textSelection(.enabled)
         } actions: {
             if source == .npm || source == .pip {
-                Button("Выбрать установку…") { showSettings = true }.disabled(model.coordinator.isBusy)
+                Button("Выбрать установку…") { showSettings = true }.disabled(model.coordinator.isBusy || model.isDiscovering)
             }
             if state.phase == .failed {
-                Button("Повторить") { Task { await model.reload() } }.disabled(model.coordinator.isBusy)
+                Button("Повторить") { Task { await model.reload() } }.disabled(model.coordinator.isBusy || model.isDiscovering)
             }
         }
     }
@@ -191,6 +224,12 @@ struct ContentView: View {
 
 private struct PackageRow: View {
     let package: PackageRecord
+    private var environmentLabel: String {
+        let runtimeRoot = URL(fileURLWithPath: package.managerPath).deletingLastPathComponent().deletingLastPathComponent().path
+        let path = package.source == .npm ? runtimeRoot : package.environmentPath ?? runtimeRoot
+        let abbreviated = path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~")
+        return (package.source == .npm ? "Node.js · " : "Python · ") + abbreviated
+    }
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: package.kind == .cask ? "app.dashed" : package.source.symbol)
@@ -205,6 +244,10 @@ private struct PackageRow: View {
                         .foregroundStyle(package.source.color)
                         .padding(.horizontal, 5).padding(.vertical, 2)
                         .background(package.source.color.opacity(0.1), in: RoundedRectangle(cornerRadius: 4))
+                }
+                if package.source == .npm || package.source == .pip {
+                    Text(environmentLabel).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                        .lineLimit(1).truncationMode(.middle).help(package.managerPath + "\n" + (package.environmentPath ?? ""))
                 }
                 Text(package.summary.isEmpty ? package.kind.title : package.summary)
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1)

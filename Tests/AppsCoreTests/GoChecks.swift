@@ -13,6 +13,12 @@ enum GoChecks {
         return root
     }
     static var all: [Check] { [
+        Check(name: "Go check has an overall cancellable deadline") {
+            let root = try fixture(); defer { try? FileManager.default.removeItem(at: root) }
+            let manager = GoManager(executable: go, runner: GoFixtureRunner(root: root, slowLatest: true), checkTimeout: .milliseconds(25))
+            do { _ = try await manager.checkUpdates(); throw CheckFailure(description: "Deadline ignored") }
+            catch { try expectEqual(error as? CommandError, .timedOut) }
+        },
         Check(name: "Go old toolchains report unsupported JSON rather than an empty inventory") {
             let runner = RecordingRunner([.init(exitCode: 0, stdout: "usage: go version [-m] [file ...]")])
             do { _ = try await GoManager(executable: go, runner: runner).list(); throw CheckFailure(description: "Unsupported Go accepted") }
@@ -96,8 +102,9 @@ struct FixtureTrash: FileTrashing {
 actor GoFixtureRunner: CommandRunning {
     let root: URL
     let badBuild: Bool
+    let slowLatest: Bool
     var installArguments: [String] = []
-    init(root: URL, badBuild: Bool = false) { self.root = root; self.badBuild = badBuild }
+    init(root: URL, badBuild: Bool = false, slowLatest: Bool = false) { self.root = root; self.badBuild = badBuild; self.slowLatest = slowLatest }
     func run(executable: URL, arguments: [String]) async throws -> CommandResult {
         if arguments.first == "help" { return .init(exitCode: 0, stdout: "go version [-json]") }
         if arguments.first == "env" {
@@ -108,7 +115,7 @@ actor GoFixtureRunner: CommandRunning {
             let staged = arguments.last!.contains(".apps-go-stage-")
             return .init(exitCode: 0, stdout: GoChecks.info(staged ? (badBuild ? "v0.1.0" : "v2.0.0") : "v1.0.0"))
         }
-        if arguments.first == "list" { return .init(exitCode: 0, stdout: #"{"Path":"example.com/tool","Version":"v2.0.0"}"#) }
+        if arguments.first == "list" { if slowLatest { try await Task.sleep(for: .seconds(2)) }; return .init(exitCode: 0, stdout: #"{"Path":"example.com/tool","Version":"v2.0.0"}"#) }
         if executable.path == "/usr/bin/env" {
             installArguments = arguments
             let path = String(arguments.first { $0.hasPrefix("GOBIN=") }!.dropFirst(6))

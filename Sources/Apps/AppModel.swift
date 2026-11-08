@@ -8,45 +8,46 @@ final class AppModel {
     let coordinator: PackageCoordinator
     var selection: PackageRecord.ID?
     var searchText = ""
-    private(set) var npmPath: String
-    private(set) var pythonPath: String
     private(set) var npmChoices: [RuntimeChoice]
     private(set) var pythonChoices: [RuntimeChoice]
+    private(set) var isDiscovering = false
     var settingsError: String?
     var sourceKey = "all"
+    var environmentKey = "all"
+    var environmentChoices: [RuntimeChoice] {
+        switch selectedSource {
+        case .npm: npmChoices
+        case .pip: pythonChoices
+        case nil: npmChoices + pythonChoices
+        default: []
+        }
+    }
     private(set) var cargoRoot: String
     var updatesOnly: Bool {
         didSet { UserDefaults.standard.set(updatesOnly, forKey: "updatesOnly") }
     }
     var selectedSource: PackageSource? { PackageSource(rawValue: sourceKey) }
     var visiblePackages: [PackageRecord] {
-        PackageQuery.filter(coordinator.packages, source: selectedSource, search: searchText, updatesOnly: updatesOnly)
+        PackageQuery.filter(coordinator.packages, source: selectedSource, search: searchText, updatesOnly: updatesOnly, managerPath: environmentKey == "all" ? nil : environmentKey)
     }
     var selectedPackage: PackageRecord? {
         visiblePackages.first { $0.id == selection }
     }
     init() {
         let defaults = UserDefaults.standard
-        let npm = defaults.string(forKey: "npmExecutable") ?? RuntimeDiscovery.npmChoices().first?.path ?? ""
-        let python = defaults.string(forKey: "pythonExecutable") ?? RuntimeDiscovery.preferredPython()?.path ?? ""
-        npmPath = npm; pythonPath = python
         let cargo = defaults.string(forKey: "cargoInstallRoot") ?? CargoManager.defaultRoot.path
         cargoRoot = cargo
-        npmChoices = Self.includingSaved(RuntimeDiscovery.npmChoices(), paths: (defaults.stringArray(forKey: "extraNpmExecutables") ?? []) + [npm])
-        pythonChoices = Self.includingSaved(RuntimeDiscovery.pythonChoices(), paths: (defaults.stringArray(forKey: "extraPythonExecutables") ?? []) + [python])
-        coordinator = PackageCoordinator(managers: ManagerDiscovery.managers(npmPath: npm.isEmpty ? nil : npm, pythonPath: python.isEmpty ? nil : python, cargoRoot: cargo))
+        npmChoices = []; pythonChoices = []
+        coordinator = PackageCoordinator(managers: [])
         updatesOnly = UserDefaults.standard.bool(forKey: "updatesOnly")
     }
 
-    func selectRuntime(_ source: PackageSource, path: String) async {
-        guard !coordinator.isBusy, path.hasPrefix("/"), source == .npm || source == .pip else { return }
-        let url = URL(fileURLWithPath: path)
-        let manager: any PackageManager = source == .npm ? NPMManager(executable: url) : PipManager(executable: url)
-        guard await coordinator.replaceManager(source: source, manager: manager) else { return }
-        if source == .npm { npmPath = path; UserDefaults.standard.set(path, forKey: "npmExecutable") }
-        else { pythonPath = path; UserDefaults.standard.set(path, forKey: "pythonExecutable") }
-        settingsError = nil
-        reconcileSelection()
+    nonisolated private static func discovered(_ source: PackageSource) -> [RuntimeChoice] {
+        let defaults = UserDefaults.standard
+        let key = source == .npm ? "extraNpmExecutables" : "extraPythonExecutables"
+        let previous = defaults.string(forKey: source == .npm ? "npmExecutable" : "pythonExecutable")
+        let saved = (defaults.stringArray(forKey: key) ?? []) + (previous.map { [$0] } ?? [])
+        return RuntimeDiscovery.includingSaved(source == .npm ? RuntimeDiscovery.npmChoices() : RuntimeDiscovery.pythonChoices(), paths: saved, python: source == .pip)
     }
 
     func chooseRuntime(_ source: PackageSource) {
@@ -66,9 +67,7 @@ final class AppModel {
         var saved = UserDefaults.standard.stringArray(forKey: key) ?? []
         if !saved.contains(chosen.path) { saved.append(chosen.path) }
         UserDefaults.standard.set(saved, forKey: key)
-        if source == .npm { npmChoices = Self.includingSaved(npmChoices, paths: [chosen.path]) }
-        else { pythonChoices = Self.includingSaved(pythonChoices, paths: [chosen.path]) }
-        Task { await selectRuntime(source, path: chosen.path) }
+        Task { await reload() }
     }
 
     func chooseCargoRoot() {
@@ -86,15 +85,23 @@ final class AppModel {
         }
     }
 
-    private static func includingSaved(_ choices: [RuntimeChoice], paths: [String]) -> [RuntimeChoice] {
-        var choices = choices
-        for path in paths where path.hasPrefix("/") && !choices.contains(where: { $0.path == path }) {
-            let exists = FileManager.default.isExecutableFile(atPath: path)
-            choices.append(RuntimeChoice(path: path, label: path + (exists ? "" : " (недоступен)")))
+    func reload() async {
+        guard !coordinator.isBusy, !isDiscovering else { return }
+        isDiscovering = true
+        defer { isDiscovering = false }
+        let cargo = cargoRoot
+        let inventory = await Task.detached(priority: .userInitiated) {
+            let npm = Self.discovered(.npm), python = Self.discovered(.pip)
+            return (npm, python, ManagerDiscovery.environmentManagers(npm: npm, python: python, cargoRoot: cargo))
+        }.value
+        guard !coordinator.isBusy else { return }
+        npmChoices = inventory.0; pythonChoices = inventory.1
+        for source in PackageSource.allCases {
+            _ = coordinator.configureManagers(source: source, replacements: inventory.2.filter { $0.source == source })
         }
-        return choices
+        if environmentKey != "all" && !environmentChoices.contains(where: { $0.path == environmentKey }) { environmentKey = "all" }
+        await coordinator.reload(); reconcileSelection()
     }
-    func reload() async { await coordinator.reload(); reconcileSelection() }
     func checkUpdates() async { await coordinator.checkUpdates(); reconcileSelection() }
     func mutate(_ id: PackageRecord.ID, action: PackageAction) async {
         await coordinator.mutate(id, action: action)

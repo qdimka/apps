@@ -4,10 +4,11 @@ import Darwin
 public struct GoManager: PackageManager {
     public let source = PackageSource.go
     public let executable: URL
+    public let checkTimeout: Duration
     public let runner: any CommandRunning
     private let trash: any FileTrashing
-    public init(executable: URL, runner: any CommandRunning = CommandRunner(), trash: any FileTrashing = SystemTrash()) {
-        self.executable = executable; self.runner = runner; self.trash = trash
+    public init(executable: URL, runner: any CommandRunning = CommandRunner(), trash: any FileTrashing = SystemTrash(), checkTimeout: Duration = .seconds(60)) {
+        self.checkTimeout = checkTimeout; self.executable = executable; self.runner = runner; self.trash = trash
     }
     private func root() async throws -> URL {
         let env = try jsonObject(try await output(["env", "-json", "GOBIN", "GOPATH", "GOFLAGS"]), source: "Go")
@@ -79,6 +80,9 @@ public struct GoManager: PackageManager {
         return new > old ? version : nil
     }
     public func checkUpdates() async throws -> [PackageRecord] {
+        try await withOperationDeadline(checkTimeout) { try await checkedRows() }
+    }
+    private func checkedRows() async throws -> [PackageRecord] {
         var rows = try await list()
         for i in rows.indices {
             if rows[i].upgradeRestriction != nil { rows[i].updateStatus = .unsupported; continue }
