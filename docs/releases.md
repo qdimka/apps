@@ -1,7 +1,7 @@
 # CI and GitHub releases
 
-The workflows are repository-independent configuration. No GitHub remote or release was created
-while preparing them. They take effect after the files are pushed to the intended GitHub repository.
+The workflows are active in [qdimka/apps](https://github.com/qdimka/apps).
+Pushing source code runs CI; creating a matching version tag separately triggers release publication.
 
 ## Workflows
 

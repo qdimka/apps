@@ -16,7 +16,9 @@ if [[ -f "$manifest_api/PackageDescription.swiftmodule/arm64-apple-macos.private
     ln -sf "$manifest_api/libPackageDescription.dylib" "$local_api/libPackageDescription.dylib"
     export SWIFTPM_CUSTOM_LIBS_DIR="$PWD/.build/swiftpm-libs"
 fi
-overlay_flags=()
+command="$1"
+shift
+swift_arguments=("$command" --disable-sandbox --cache-path "$PWD/.build/cache")
 if [[ -f "$(xcode-select -p)/usr/include/swift/module.modulemap" ]] &&
    [[ -f "$(xcode-select -p)/usr/include/swift/bridging.modulemap" ]]; then
     mkdir -p .build/toolchain
@@ -27,8 +29,6 @@ root, developer = sys.argv[1:]
 overlay = {'version': 0, 'roots': [{'type': 'file', 'name': developer + '/usr/include/swift/module.modulemap', 'external-contents': root + '/.build/toolchain/empty.modulemap'}]}
 pathlib.Path(root + '/.build/toolchain/overlay.json').write_text(json.dumps(overlay))
 PY
-    overlay_flags=(-Xswiftc -vfsoverlay -Xswiftc "$PWD/.build/toolchain/overlay.json")
+    swift_arguments+=(-Xswiftc -vfsoverlay -Xswiftc "$PWD/.build/toolchain/overlay.json")
 fi
-command="$1"
-shift
-exec swift "$command" --disable-sandbox --cache-path "$PWD/.build/cache" "${overlay_flags[@]}" "$@"
+exec swift "${swift_arguments[@]}" "$@"

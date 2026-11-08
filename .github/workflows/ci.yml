@@ -48,6 +48,8 @@ jobs:
           test "$(uname -m)" = "$EXPECTED_ARCH"
         env:
           EXPECTED_ARCH: ${{ matrix.arch }}
+      - name: Check toolchain wrapper
+        run: Tests/ToolchainChecks.sh
       - name: Check release preflight guards
         run: Tests/ReleaseChecks.sh
       - name: Run checks

@@ -39,7 +39,7 @@ Pushing a matching version tag such as `v0.3.0` publishes both app ZIPs and SHA2
 GitHub Releases after both builds pass. No Apple credentials are required for the ad hoc signed
 bundles. See [CI setup, release steps, and signing limits](docs/releases.md).
 
-The configuration is ready for a future GitHub repository; no remote has been connected yet.
+The project is hosted at [qdimka/apps](https://github.com/qdimka/apps); build status and archives are available in its [Actions runs](https://github.com/qdimka/apps/actions).
 
 ## Build and run
 
