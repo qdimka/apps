@@ -84,7 +84,8 @@ bounded and appears after completion. Errors shown in the UI contain a bounded o
 Go/Cargo update checks have a shared 60-second deadline. Pip checks have a 60-second deadline
 per interpreter, with bounded individual network requests. Unknown results never become a claim
 that the installed version is latest. Homebrew catalog freshness is unverified; incomplete pip
-index responses remain unsupported. Upgrade actions may invoke the native manager even when
+index responses remain unsupported. The pip configuration guard accepts both legacy flat option
+pairs and pip 26.3 source-grouped dictionaries; unknown option/value shapes fail closed. Upgrade actions may invoke the native manager even when
 no independent check is available, subject to installation restrictions.
 
 After every attempted mutation, reread that runtime. A zero exit code does not establish removal:

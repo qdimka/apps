@@ -113,3 +113,15 @@ preflight checks, and explicit test-Python injection prepared in this change. No
   packaging, permission boundaries, tag checks, or draft/upload/publish sequence.
 - Actual GitHub execution, Intel compilation, remote policy, and release publication remain unverified
   until the intended repository is added. No tags, pushes, or releases were created.
+
+## First remote CI execution
+
+After the repository was created and source was pushed, the first run exposed a system Bash 3.2
+empty-array/nounset failure in the toolchain wrapper. A clean-toolchain fixture reproduced the
+failure; an always-populated argument array fixed it, with two system-Bash regression checks.
+The next run reached the suite and exposed pip 26.3's source-grouped Configuration.items format.
+The old guard silently skipped nested options. A temporary pip 26.3 environment and mocked
+flat/grouped schemas reproduced the failure; normalization now supports both and rejects unknown
+shapes. Local suites pass 93 checks on pip 26.3 and on the legacy system pip. No user-installed
+packages were changed; pip compatibility installs used a disposable temporary environment.
+Remote runs and build artifacts are available in [Actions](https://github.com/qdimka/apps/actions).

@@ -149,7 +149,16 @@ dangerous = {'python', 'requirement', 'editable', 'target', 'prefix', 'root', 'u
              'global-option', 'install-option', 'break-system-packages'}
 booleans = {'user', 'force-reinstall', 'ignore-installed', 'no-deps', 'break-system-packages'}
 blocked = []
-for key, value in config.items():
+# pip 26.3 groups options by source file; older versions expose flat option pairs.
+# Reject unknown shapes rather than silently skipping safety-relevant options.
+def option_items():
+    for key, value in config.items():
+        pairs = value.items() if isinstance(value, dict) else [(key, value)]
+        for option, setting in pairs:
+            if not isinstance(option, str) or '.' not in option or not isinstance(setting, (str, bool, int, float, type(None))):
+                raise RuntimeError('Unsupported pip configuration format')
+            yield option, setting
+for key, value in option_items():
     option = key.split('.')[-1]
     if option == 'upgrade-strategy' and str(value).strip() != 'only-if-needed':
         blocked.append(key)

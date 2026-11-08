@@ -60,6 +60,26 @@ enum PipChecks {
             do { _ = try await PipManager(executable: python, runner: runner, checkTimeout: .milliseconds(30)).checkUpdates(); throw CheckFailure(description: "Check did not time out") }
             catch { try expectEqual(error as? CommandError, .timedOut) }
         },
+        Check(name: "pip guard handles flat and source-grouped configuration and rejects unknown shapes") {
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let module = directory.appendingPathComponent("pip/_internal")
+            try FileManager.default.createDirectory(at: module, withIntermediateDirectories: true)
+            for path in ["pip/__init__.py", "pip/_internal/__init__.py"] { try Data().write(to: directory.appendingPathComponent(path)) }
+            for (mapping, accepted) in [("{'global.target':'/other', ':env:.requirement':'/more.txt'}", true),
+                                        ("{'/private/pip.conf': {'global.target':'/other'}, ':env:': {':env:.requirement':'/more.txt'}}", true),
+                                        ("{'future-format': ['global.target']}", false)] {
+                let mock = "class Configuration:\n def __init__(self, **kwargs): pass\n def load(self): pass\n def items(self): return " + mapping + ".items()\n"
+                try Data(mock.utf8).write(to: module.appendingPathComponent("configuration.py"))
+                let result = try await CommandRunner().run(executable: URL(fileURLWithPath: "/usr/bin/env"), arguments: ["PYTHONPATH=" + directory.path, "PYTHONDONTWRITEBYTECODE=1", testPythonPath, "-c", PipManager.configurationGuardScript])
+                if accepted {
+                    let text = try result.requireSuccess()
+                    let keys = try JSONSerialization.jsonObject(with: Data(text.utf8)) as! [String]
+                    try expectEqual(keys, [":env:.requirement", "global.target"])
+                    try expect(!text.contains("/private") && !text.contains("/other"))
+                } else { try expect(result.exitCode != 0, "Unknown configuration schema must fail closed") }
+            }
+        },
         Check(name: "pip config guard reads dangerous file and environment keys without leaking registry secrets") {
             let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
