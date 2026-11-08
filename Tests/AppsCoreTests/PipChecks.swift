@@ -66,7 +66,7 @@ enum PipChecks {
             defer { try? FileManager.default.removeItem(at: directory) }
             let file = directory.appendingPathComponent("pip.conf")
             try Data("[global]\nindex-url=https://user:secret@example.invalid/simple\npython=/wrong/python\n[uninstall]\nrequirement=/extra.txt\n".utf8).write(to: file)
-            let result = try await CommandRunner().run(executable: URL(fileURLWithPath: "/usr/bin/env"), arguments: ["PIP_CONFIG_FILE=" + file.path, "PIP_TARGET=/other", "PIP_PYTHON=/different/python", "PIP_REQUIREMENT=/another.txt", "/usr/bin/python3", "-c", PipManager.configurationGuardScript])
+            let result = try await CommandRunner().run(executable: URL(fileURLWithPath: "/usr/bin/env"), arguments: ["PIP_CONFIG_FILE=" + file.path, "PIP_TARGET=/other", "PIP_PYTHON=/different/python", "PIP_REQUIREMENT=/another.txt", testPythonPath, "-c", PipManager.configurationGuardScript])
             let text = try result.requireSuccess()
             let keys = try JSONSerialization.jsonObject(with: Data(text.utf8)) as! [String]
             try expect(keys.contains("global.python") && keys.contains("uninstall.requirement") && keys.contains(":env:.target"))

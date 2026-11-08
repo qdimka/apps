@@ -32,6 +32,15 @@ The current application interface is in Russian; this documentation is in Englis
 
 Go inventory requires Go 1.25+ for JSON build information. Python inventory requires Python 3.8+ and uses the standard library even when pip is absent. Each source needs its existing manager; apps does not install managers.
 
+## GitHub Actions and releases
+
+CI builds and checks Apple Silicon and Intel app bundles on branch pushes and pull requests.
+Pushing a matching version tag such as `v0.3.0` publishes both app ZIPs and SHA256SUMS to
+GitHub Releases after both builds pass. No Apple credentials are required for the ad hoc signed
+bundles. See [CI setup, release steps, and signing limits](docs/releases.md).
+
+The configuration is ready for a future GitHub repository; no remote has been connected yet.
+
 ## Build and run
 
 Requirements: macOS 14+ and a Swift 6 toolchain from Xcode or Command Line Tools.

@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      release_tag:
+        description: Optional version tag to validate against Info.plist
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Test and build (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Set up Python for isolated checks
+        id: python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Inspect toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+          test "$(uname -m)" = "$EXPECTED_ARCH"
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+      - name: Check release preflight guards
+        run: Tests/ReleaseChecks.sh
+      - name: Run checks
+        run: scripts/test.sh
+        env:
+          APPS_TEST_PYTHON: ${{ steps.python.outputs.python-path }}
+      - name: Build and package
+        id: package
+        run: |
+          scripts/package-release.sh "$RELEASE_TAG"
+          echo "archive=$(find dist -maxdepth 1 -name 'apps-*-macos-*.zip' -print)" >> "$GITHUB_OUTPUT"
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || '' }}
+          APPS_EXPECTED_ARCH: ${{ matrix.arch }}
+      - name: Upload app archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: apps-macos-${{ matrix.arch }}
+          path: ${{ steps.package.outputs.archive }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

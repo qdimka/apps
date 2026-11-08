@@ -104,3 +104,11 @@ and supplies a VFS workaround for the development Command Line Tools mismatch. P
 `scripts/build-app.sh` copies the executable through a temporary file and rename, builds the icon,
 validates Info.plist, and ad hoc signs `dist/apps.app`. Verify the native app after restarting it;
 a running process can still hold an older executable mapping.
+
+## CI and release pipeline
+
+The reusable CI workflow tests and packages native arm64/x86_64 bundles on standard macOS runners.
+Release tags call the same workflow, then publish both ZIPs and checksums through a dedicated job.
+`scripts/package-release.sh` checks tag/plist/architecture/signature and packages with ditto.
+Only publication receives repository write access. See [release configuration](releases.md) before
+changing triggers, permissions, archive formats, or signing assumptions.

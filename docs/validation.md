@@ -94,3 +94,22 @@ were saved under docs/assets and inspected: npm environments, a project venv, an
 The UI remains Russian; no screenshots were edited to imply an English interface. Documentation
 verification checks local Markdown targets, image signatures/dimensions, English prose, and whitespace.
 Automatic instruction loading in a new host session was not exercised in this documentation-only change.
+
+## GitHub Actions configuration verification
+
+**Code state:** base `3e83130` plus the local CI/release workflows, packaging script, release
+preflight checks, and explicit test-Python injection prepared in this change. No remote was connected.
+
+- `scripts/test.sh`: 92 checks, 0 failures with the default interpreter.
+- `APPS_TEST_PYTHON=/opt/anaconda3/bin/python scripts/test.sh`: 92 checks, 0 failures with an explicit interpreter.
+- `Tests/ReleaseChecks.sh`: 4 preflight checks passed, proving rejected tags/versions/architecture
+  do not invoke the app build in a disposable fixture. Initial RED was the absent packaging script.
+- actionlint v1.7.12: both workflows validated with no diagnostics. Tool installed only in a temporary directory.
+- `bash -n scripts/package-release.sh Tests/ReleaseChecks.sh`: passed.
+- `scripts/package-release.sh v0.3.0`: local arm64 archive built and ZIP integrity passed.
+- Extracted ZIP: Info.plist version, executable permission, arm64 architecture, and strict signature
+  verification passed. SHA-256 was computed for the archive.
+- Independent read-only review found no Critical, Important, or Minor findings in the workflows,
+  packaging, permission boundaries, tag checks, or draft/upload/publish sequence.
+- Actual GitHub execution, Intel compilation, remote policy, and release publication remain unverified
+  until the intended repository is added. No tags, pushes, or releases were created.

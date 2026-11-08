@@ -1,6 +1,8 @@
 import Foundation
 import AppsCore
 
+let testPythonPath = ProcessInfo.processInfo.environment["APPS_TEST_PYTHON"] ?? "/usr/bin/python3"
+
 struct CheckFailure: Error, CustomStringConvertible {
     let description: String
 }

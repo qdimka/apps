@@ -12,7 +12,7 @@ enum RuntimeChecks {
             let directory = FileManager.default.temporaryDirectory.appendingPathComponent("apps-venv-" + UUID().uuidString)
             defer { try? FileManager.default.removeItem(at: directory) }
             let runner = CommandRunner()
-            _ = try await runner.run(executable: URL(fileURLWithPath: "/usr/bin/python3"), arguments: ["-m", "venv", "--without-pip", directory.path]).requireSuccess()
+            _ = try await runner.run(executable: URL(fileURLWithPath: testPythonPath), arguments: ["-m", "venv", "--without-pip", directory.path]).requireSuccess()
             let python = directory.appendingPathComponent("bin/python")
             let location = try await runner.run(executable: python, arguments: ["-c", "import sysconfig; print(sysconfig.get_path('purelib'))"]).requireSuccess().trimmingCharacters(in: .whitespacesAndNewlines)
             let metadata = URL(fileURLWithPath: location).appendingPathComponent("apps_qa_fixture-1.0.dist-info")

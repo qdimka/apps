@@ -14,6 +14,8 @@ paid service, or third-party Swift dependency. Target macOS 14+ and Swift 6.
   runtime sections of `docs/architecture.md` and the environment section in `README.md`.
 - Before packaging or reporting release verification, read `docs/validation.md`;
   it records historical evidence, not a substitute for checks on your changes.
+- Before changing CI, packaging, release triggers, or publication, read `docs/releases.md`.
+  Keep PR builds read-only; publish only from a validated version tag after both builds pass.
 - When changing screenshots, read `docs/assets/README.md` before capturing new images.
 - Read historical files under `docs/superpowers/` only when investigating a decision
   or explicitly continuing that plan. Start with its README to identify superseded work.
