@@ -31,6 +31,7 @@ public enum ManagerDiscovery {
             case .homebrew: return HomebrewManager(executable: url)
             case .uv: return UVManager(executable: url)
             case .pipx: return PipxManager(executable: url)
+            case .npm: return NPMManager(executable: url)
             }
         }
     }

@@ -1,11 +1,13 @@
 import Foundation
 
 public enum ManagerError: LocalizedError {
-    case invalidData(String), invalidTarget
+    case invalidData(String), invalidTarget, operationRestricted(String), contextChanged
     public var errorDescription: String? {
         switch self {
         case let .invalidData(source): "Не удалось прочитать данные \(source). Возможно, формат этой версии менеджера не поддерживается."
         case .invalidTarget: "Пакет не принадлежит выбранной установке менеджера или его имя недопустимо."
+        case let .operationRestricted(reason): reason
+        case .contextChanged: "Пакет или окружение изменились. Обновите список перед повтором операции."
         }
     }
 }
@@ -22,8 +24,9 @@ public protocol PackageManager: Sendable {
 
 extension PackageManager {
     func validate(_ package: PackageRecord) throws {
+        let pattern = source == .npm ? #"^(?:@[A-Za-z0-9_][A-Za-z0-9._-]*/)?[A-Za-z0-9_][A-Za-z0-9._-]*$"# : #"^[A-Za-z0-9][A-Za-z0-9._+@/-]*$"#
         guard package.source == source, package.managerPath == executable.path,
-              package.name.range(of: #"^[A-Za-z0-9][A-Za-z0-9._+@/-]*$"#, options: .regularExpression) != nil,
+              package.name.range(of: pattern, options: .regularExpression) != nil,
               !package.name.split(separator: "/").contains("..") else { throw ManagerError.invalidTarget }
     }
     func output(_ arguments: [String]) async throws -> String {

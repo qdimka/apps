@@ -31,7 +31,7 @@ struct Check {
             if failures > 0 { exit(1) }
             return
         }
-        let checks = CommandRunnerChecks.all + ManagerChecks.all + CoordinatorChecks.all
+        let checks = CommandRunnerChecks.all + ManagerChecks.all + CoordinatorChecks.all + NPMChecks.all
         var failures = 0
         for check in checks {
             do { try await check.run(); print("PASS \(check.name)") }
