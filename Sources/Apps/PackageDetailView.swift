@@ -105,6 +105,13 @@ struct PackageDetailView: View {
             } else if package.updateStatus == .notChecked {
                 Text("Нажмите «Проверить обновления» на панели инструментов.")
                     .font(.caption).foregroundStyle(.secondary)
+            } else if package.updateStatus == .unsupported {
+                Text("Свежесть каталога Homebrew не подтверждена. Отсутствие найденного обновления не означает, что версия последняя.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if package.source == .homebrew && package.updateStatus == .available {
+                Text("По локальному каталогу Homebrew. Если он устарел, доступная версия может быть новее указанной.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             if package.pinned {
                 Label("Версия закреплена в менеджере", systemImage: "pin.fill").font(.caption).foregroundStyle(.secondary)

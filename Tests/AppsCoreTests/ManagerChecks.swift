@@ -23,6 +23,20 @@ enum ManagerChecks {
     static let pipxJSON = #"{"pipx_spec_version":"0.1","venvs":{"httpie":{"metadata":{"main_package":{"package":"httpie","package_version":"3.2.4","apps":["http","https","httpie"],"app_paths":[{"__Path__":"/tools/httpie/bin/http"}],"pinned":false},"injected_packages":{}}},"black-old":{"metadata":{"main_package":{"package":"black","package_version":"24.0","apps":["black-old"],"suffix":"-old","pinned":true},"injected_packages":{}}}}}"#
 
     static let all: [Check] = [
+        Check(name: "Update check never runs brew update or package migrations") {
+            let runner = RecordingRunner([.init(exitCode: 0, stdout: brewJSON)])
+            let rows = try await HomebrewManager(executable: brew, runner: runner).checkUpdates()
+            let calls = await runner.calls()
+            try expectEqual(calls.count, 1)
+            try expectEqual(calls[0].arguments, ["info", "--json=v2", "--installed"])
+            try expectEqual(rows[0].updateStatus, .available)
+        },
+        Check(name: "Skipped cask checks and unconfirmed catalog freshness stay unknown") {
+            let json = #"{"formulae":[{"name":"git","installed":[{"version":"2"}],"outdated":false}],"casks":[{"token":"app","installed":"1","version":"2","auto_updates":true,"outdated":false}]}"#
+            let rows = try HomebrewManager.parse(json, executable: brew, checked: true)
+            try expectEqual(rows[0].updateStatus, .unsupported)
+            try expectEqual(rows[1].updateStatus, .unsupported)
+        },
         Check(name: "Brew parses formulae and casks independently") {
             let rows = try HomebrewManager.parse(brewJSON, executable: brew)
             try expectEqual(rows.count, 2)
@@ -92,7 +106,7 @@ enum ManagerChecks {
             let calls = await runner.calls()
             try expectEqual(calls[0].executable, brew)
             try expectEqual(calls[0].arguments, ["uninstall", "--cask", "--", "rectangle"])
-            try expectEqual(calls[1].arguments, ["upgrade", "--cask", "--", "rectangle"])
+            try expectEqual(calls[1].arguments, ["upgrade", "--cask", "--greedy", "--", "rectangle"])
         },
         Check(name: "Python mutation commands preserve uv and pipx semantics") {
             let runner = RecordingRunner()

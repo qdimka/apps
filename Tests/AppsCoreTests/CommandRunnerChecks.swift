@@ -1,8 +1,39 @@
 import Foundation
+import Darwin
 import AppsCore
 
 enum CommandRunnerChecks {
     static let all: [Check] = [
+        Check(name: "Homebrew cannot autoremove unrelated packages or upgrade reverse dependents") {
+            for variable in ["HOMEBREW_NO_AUTOREMOVE", "HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK"] {
+                let result = try await CommandRunner().run(executable: URL(fileURLWithPath: "/usr/bin/printenv"), arguments: [variable])
+                try expectEqual(result.stdout, "1\n")
+                try expectEqual(result.exitCode, 0)
+            }
+        },
+        Check(name: "Large command errors have a bounded user-facing description") {
+            let description = CommandError.failed(7, String(repeating: "x", count: 100_000) + "diagnostic tail").localizedDescription
+            try expect(description.count < 5000)
+            try expect(description.hasSuffix("diagnostic tail"))
+        },
+        Check(name: "Timeout kills a stubborn child as well as its parent") {
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let output = directory.appendingPathComponent("writes"), pidFile = directory.appendingPathComponent("pid")
+            defer {
+                if let text = try? String(contentsOf: pidFile, encoding: .utf8), let pid = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines)) { Darwin.kill(pid, SIGKILL) }
+                try? FileManager.default.removeItem(at: directory)
+            }
+            let script = #"trap 'exit 0' TERM; /bin/sh -c 'echo $$ > "$2"; trap "" TERM; while :; do printf x >> "$1"; /bin/sleep 0.03; done' child "$1" "$2" & wait"#
+            do {
+                _ = try await CommandRunner(timeout: 0.2).run(executable: URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", script, "parent", output.path, pidFile.path])
+                throw CheckFailure(description: "Expected timeout")
+            } catch { try expectEqual(error as? CommandError, .timedOut) }
+            let before = try Data(contentsOf: output).count
+            try await Task.sleep(for: .milliseconds(150))
+            let after = try Data(contentsOf: output).count
+            try expectEqual(after, before)
+        },
         Check(name: "Package identities include source and manager path") {
             let brew = PackageRecord(name: "ruff", source: .homebrew, managerPath: "/opt/homebrew/bin/brew", version: "1")
             let uv = PackageRecord(name: "ruff", source: .uv, managerPath: "/usr/bin/uv", version: "1")

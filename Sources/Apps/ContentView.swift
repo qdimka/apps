@@ -49,7 +49,7 @@ struct ContentView: View {
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(model.coordinator.isBusy)
-                .help("Проверить обновления Homebrew; пакеты не устанавливаются")
+                .help("Проверить локальный каталог Homebrew без изменения установок")
                 Button { showLog = true } label: { Label("Журнал", systemImage: "terminal") }
                     .help("Журнал операций")
             }

@@ -48,17 +48,23 @@ public final class PackageCoordinator {
         guard !isBusy else { return }
         isBusy = true; notice = nil
         defer { isBusy = false; activity = nil }
-        for manager in managers {
-            activity = (check ? "Проверка обновлений: " : "Загрузка: ") + manager.source.title
-            await refresh(manager, check: check)
+        activity = check ? "Проверка данных источников…" : "Загрузка источников…"
+        await withTaskGroup(of: Void.self) { group in
+            for manager in managers {
+                group.addTask { await self.refresh(manager, check: check) }
+            }
+            await group.waitForAll()
         }
         lastLoadedAt = Date()
         if check {
-            notice = .init(message: "Проверка завершена. Для uv и pipx наличие новой версии пока не определяется; их можно обновить вручную.", isError: false)
+            let failed = sourceStates.filter { $0.value.phase == .failed }.map { $0.key.title }.sorted()
+            notice = failed.isEmpty
+                ? .init(message: "Проверка завершена по локальным данным. Свежесть каталога Homebrew не подтверждена; новые версии uv/pipx не проверяются.", isError: false)
+                : .init(message: "Не удалось проверить: \(failed.joined(separator: ", ")). Их статусы обновлений сброшены.", isError: true)
         }
     }
 
-    private func refresh(_ manager: any PackageManager, check: Bool) async {
+    @discardableResult private func refresh(_ manager: any PackageManager, check: Bool) async -> Bool {
         let source = manager.source
         sourceStates[source] = .init(phase: .loading, message: "Загрузка…", managerPath: manager.executable.path)
         do {
@@ -68,9 +74,16 @@ public final class PackageCoordinator {
             packages.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             sourceStates[source] = .init(phase: .ready, message: "\(rows.count) пакетов", managerPath: manager.executable.path,
                                         checkedAt: check && source == .homebrew ? Date() : nil)
+            return true
         } catch {
-            sourceStates[source] = .init(phase: .failed, message: error.localizedDescription, managerPath: manager.executable.path)
-            appendLog("\(source.title): \(error.localizedDescription)")
+            for index in packages.indices where packages[index].source == source {
+                packages[index].updateStatus = .notChecked
+                packages[index].latestVersion = nil
+            }
+            let message = shortError(error)
+            sourceStates[source] = .init(phase: .failed, message: message, managerPath: manager.executable.path)
+            appendLog("\(source.title): \(message)")
+            return false
         }
     }
 
@@ -90,22 +103,38 @@ public final class PackageCoordinator {
         activity = (action == .upgrade ? "Обновление " : "Удаление ") + package.name
         defer { isBusy = false; activity = nil }
         appendLog("\(Date().formatted()) — \(activity!) [\(package.source.title)]\nМенеджер: \(package.managerPath)")
+        var commandSucceeded = false
         do {
             let result = try await (action == .upgrade ? manager.upgrade(package) : manager.uninstall(package))
             appendLog(result.log + "\nКод завершения: \(result.exitCode)")
             _ = try result.requireSuccess()
-            notice = .init(message: package.name + (action == .upgrade ? ": обновление завершено" : ": удалён"), isError: false)
+            commandSucceeded = true
         } catch {
-            notice = .init(message: error.localizedDescription, isError: true)
-            appendLog(error.localizedDescription)
+            let message = shortError(error)
+            notice = .init(message: message, isError: true)
+            appendLog(message)
         }
         // Even failed operations can partially change the registry.
-        await refresh(manager, check: false)
+        let refreshed = await refresh(manager, check: false)
+        if commandSucceeded {
+            if !refreshed {
+                notice = .init(message: "Команда завершена, но подтвердить результат не удалось. Перечитайте источник.", isError: true)
+            } else if action == .uninstall && packages.contains(where: { $0.id == id }) {
+                notice = .init(message: "\(package.name) остался установленным. Подробности — в журнале.", isError: true)
+            } else {
+                notice = .init(message: package.name + (action == .upgrade ? ": команда обновления выполнена" : ": удалён"), isError: false)
+            }
+        }
     }
 
     private func appendLog(_ entry: String) {
-        log += (log.isEmpty ? "" : "\n\n") + entry
+        log += (log.isEmpty ? "" : "\n\n") + entry.suffix(80_000)
         if log.count > 300_000 { log = "…Ранние записи скрыты…\n" + log.suffix(250_000) }
+    }
+
+    private func shortError(_ error: Error) -> String {
+        let message = error.localizedDescription
+        return message.count > 4500 ? "…\n" + message.suffix(4000) : message
     }
 }
 

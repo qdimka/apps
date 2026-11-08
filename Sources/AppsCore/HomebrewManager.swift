@@ -11,7 +11,8 @@ public struct HomebrewManager: PackageManager {
         try Self.parse(await output(["info", "--json=v2", "--installed"]), executable: executable)
     }
     public func checkUpdates() async throws -> [PackageRecord] {
-        _ = try await output(["update"])
+        // brew update may migrate installed formulae/casks. Inspect the local
+        // catalog instead and never claim its freshness has been confirmed.
         return try Self.parse(await output(["info", "--json=v2", "--installed"]), executable: executable, checked: true)
     }
     public func upgrade(_ package: PackageRecord) async throws -> CommandResult { try await mutate("upgrade", package) }
@@ -19,7 +20,9 @@ public struct HomebrewManager: PackageManager {
     private func mutate(_ command: String, _ package: PackageRecord) async throws -> CommandResult {
         try validate(package)
         guard package.kind == .formula || package.kind == .cask else { throw ManagerError.invalidTarget }
-        return try await runner.run(executable: executable, arguments: [command, package.kind == .cask ? "--cask" : "--formula", "--", package.name])
+        var arguments = [command, package.kind == .cask ? "--cask" : "--formula"]
+        if command == "upgrade" && package.kind == .cask { arguments.append("--greedy") }
+        return try await runner.run(executable: executable, arguments: arguments + ["--", package.name])
     }
 
     public static func parse(_ text: String, executable: URL, checked: Bool = false) throws -> [PackageRecord] {
@@ -33,7 +36,7 @@ public struct HomebrewManager: PackageManager {
             let versions = installed.compactMap { $0["version"] as? String }
             guard !versions.isEmpty else { throw ManagerError.invalidData("Homebrew") }
             let latest = (item["versions"] as? [String: Any])?["stable"] as? String
-            let status: UpdateStatus = !checked ? .notChecked : (item["outdated"] as? Bool).map { $0 ? .available : .current } ?? .unsupported
+            let status: UpdateStatus = !checked ? .notChecked : (item["outdated"] as? Bool == true ? .available : .unsupported)
             packages.append(PackageRecord(name: item["full_name"] as? String ?? name, source: .homebrew, managerPath: executable.path,
                 version: versions.joined(separator: ", "), kind: .formula, summary: item["desc"] as? String ?? "",
                 installationPath: prefix + "/Cellar/" + name, dependencies: item["dependencies"] as? [String] ?? [],
@@ -47,7 +50,7 @@ public struct HomebrewManager: PackageManager {
             else { throw ManagerError.invalidData("Homebrew") }
             let latest = item["version"] as? String
             let status: UpdateStatus = !checked ? .notChecked : latest == "latest" ? .unsupported :
-                (item["outdated"] as? Bool).map { $0 ? .available : .current } ?? .unsupported
+                (item["outdated"] as? Bool == true ? .available : .unsupported)
             packages.append(PackageRecord(name: item["full_token"] as? String ?? token, source: .homebrew, managerPath: executable.path,
                 version: version, kind: .cask, summary: item["desc"] as? String ?? "",
                 installationPath: prefix + "/Caskroom/" + token, latestVersion: checked ? latest : nil,
