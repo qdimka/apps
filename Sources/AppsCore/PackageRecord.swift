@@ -1,18 +1,20 @@
 import Foundation
 
 public enum PackageSource: String, CaseIterable, Identifiable, Sendable, Codable {
-    case homebrew, uv, pipx, npm
+    case homebrew, uv, pipx, npm, pip
     public var id: String { rawValue }
     public var title: String {
-        switch self { case .homebrew: "Homebrew"; case .uv: "uv tools"; case .pipx: "pipx"; case .npm: "npm" }
+        switch self { case .homebrew: "Homebrew"; case .uv: "uv tools"; case .pipx: "pipx"; case .npm: "npm"; case .pip: "pip" }
     }
-    public var executableName: String { self == .homebrew ? "brew" : rawValue }
+    public var executableName: String {
+        switch self { case .homebrew: "brew"; case .pip: "python3"; default: rawValue }
+    }
 }
 
 public enum PackageKind: String, Sendable, Codable {
-    case formula, cask, tool, npmPackage
+    case formula, cask, tool, npmPackage, pythonPackage
     public var title: String {
-        switch self { case .formula: "CLI / библиотека"; case .cask: "Приложение"; case .tool: "Python CLI"; case .npmPackage: "npm · глобально" }
+        switch self { case .formula: "CLI / библиотека"; case .cask: "Приложение"; case .tool: "Python CLI"; case .npmPackage: "npm · глобально"; case .pythonPackage: "Пакет Python" }
     }
 }
 
@@ -52,16 +54,18 @@ public struct PackageRecord: Identifiable, Hashable, Sendable, Codable {
     public var environmentPath: String?
     public var upgradeRestriction: String?
     public var removalRestriction: String?
+    public var isUserInstall: Bool
 
     public init(name: String, source: PackageSource, managerPath: String, version: String,
                 kind: PackageKind = .tool, summary: String = "", installationPath: String? = nil,
                 executables: [String] = [], dependencies: [String] = [], latestVersion: String? = nil,
                 updateStatus: UpdateStatus = .notChecked, pinned: Bool = false, homepage: String? = nil,
-                environmentPath: String? = nil, upgradeRestriction: String? = nil, removalRestriction: String? = nil) {
+                environmentPath: String? = nil, upgradeRestriction: String? = nil, removalRestriction: String? = nil, isUserInstall: Bool = false) {
         self.name = name; self.source = source; self.managerPath = managerPath; self.version = version
         self.kind = kind; self.summary = summary; self.installationPath = installationPath
         self.executables = executables; self.dependencies = dependencies; self.latestVersion = latestVersion
         self.updateStatus = updateStatus; self.pinned = pinned; self.homepage = homepage
         self.environmentPath = environmentPath; self.upgradeRestriction = upgradeRestriction; self.removalRestriction = removalRestriction
+        self.isUserInstall = isUserInstall
     }
 }

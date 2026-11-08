@@ -24,14 +24,21 @@ public enum ManagerDiscovery {
         return nil
     }
 
-    public static func managers() -> [any PackageManager] {
+    public static func managers(npmPath: String? = nil, pythonPath: String? = nil) -> [any PackageManager] {
         PackageSource.allCases.compactMap { source in
-            guard let url = find(source) else { return nil }
+            let candidate: URL?
+            switch source {
+            case .npm: candidate = (npmPath ?? RuntimeDiscovery.npmChoices().first?.path).map { URL(fileURLWithPath: $0) }
+            case .pip: candidate = pythonPath.map { URL(fileURLWithPath: $0) } ?? RuntimeDiscovery.preferredPython()
+            default: candidate = find(source)
+            }
+            guard let url = candidate else { return nil }
             switch source {
             case .homebrew: return HomebrewManager(executable: url)
             case .uv: return UVManager(executable: url)
             case .pipx: return PipxManager(executable: url)
             case .npm: return NPMManager(executable: url)
+            case .pip: return PipManager(executable: url)
             }
         }
     }
