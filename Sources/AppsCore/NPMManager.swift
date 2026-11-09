@@ -55,7 +55,7 @@ public struct NPMManager: PackageManager {
                   let candidate = SemanticVersion(latest), let installed = SemanticVersion(fresh.version) else {
                 throw ManagerError.invalidData("npm version")
             }
-            guard candidate > installed else { return .init(exitCode: 0, stdout: "Более новая версия не найдена. Установленная версия сохранена.") }
+            guard candidate > installed else { return .init(exitCode: 0, stdout: L("No newer version found. The installed version was preserved.")) }
             target = latest
         }
         let arguments = action == .upgrade
@@ -81,15 +81,15 @@ public struct NPMManager: PackageManager {
                 ["git+", "git://", "ssh://", "github:", "gitlab:", "bitbucket:", "file:", "npm:"].contains { value.contains($0) }
             }
             let restriction: String?
-            if linked { restriction = "Локальная npm-ссылка: обновите исходный проект." }
-            else if alias || nonRegistry { restriction = "Пакет установлен как alias или из другого источника. Обновите исходную установку." }
+            if linked { restriction = L("Local npm link: update the original project.") }
+            else if alias || nonRegistry { restriction = L("This package is an alias or comes from another source. Update the original installation.") }
             else { restriction = nil }
             return PackageRecord(name: name, source: .npm, managerPath: executable.path, version: version, kind: .npmPackage,
-                summary: item["description"] as? String ?? "Глобальный пакет npm",
+                summary: item["description"] as? String ?? L("Global npm package"),
                 installationPath: item["path"] as? String ?? root + "/" + name,
                 homepage: item["homepage"] as? String, environmentPath: prefix,
                 upgradeRestriction: restriction,
-                removalRestriction: name == "npm" ? "Удаление npm отключено, чтобы сохранить управление этим источником." : nil)
+                removalRestriction: name == "npm" ? L("Removing npm is disabled to preserve this source.") : nil)
         }
     }
 }

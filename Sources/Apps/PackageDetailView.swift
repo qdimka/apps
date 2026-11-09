@@ -11,18 +11,19 @@ struct PackageDetailView: View {
     }
 
     var body: some View {
+        let _ = model.language
         ScrollView {
             VStack(alignment: .leading, spacing: 26) {
                 header
                 updateSection
                 HStack(spacing: 10) {
                     Button { Task { await model.mutate(package.id, action: .upgrade) } } label: {
-                        Label("Обновить", systemImage: "arrow.down.circle")
+                        Label(L("Update"), systemImage: "arrow.down.circle")
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(!canModify || package.pinned || package.upgradeRestriction != nil)
                     Button(role: .destructive) { confirmDeletion = true } label: {
-                        Label("Удалить", systemImage: "trash")
+                        Label(L("Remove"), systemImage: "trash")
                     }.disabled(!canModify || package.removalRestriction != nil)
                 }.controlSize(.large)
                 ForEach(Array(Set([package.upgradeRestriction, package.removalRestriction].compactMap { $0 })).sorted(), id: \.self) { reason in
@@ -30,18 +31,18 @@ struct PackageDetailView: View {
                 }
                 Divider()
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("Установка").font(.headline)
-                    metadata("Источник", package.source.title)
-                    metadata("Тип", package.kind.title)
-                    metadata("Версия", package.version, mono: true)
-                    if let reference = package.packageReference { metadata("Пакет", reference, mono: true) }
-                    if let path = package.installationPath { metadata("Расположение", path, mono: true) }
-                    if let environment = package.environmentPath { metadata("Окружение", environment, mono: true) }
-                    metadata(package.source == .pip ? "Интерпретатор" : "Менеджер", package.managerPath, mono: true)
+                    Text(L("Installation")).font(.headline)
+                    metadata(L("Source"), package.source.title)
+                    metadata(L("Type"), package.kind.title)
+                    metadata(L("Version"), package.version, mono: true)
+                    if let reference = package.packageReference { metadata(L("Package"), reference, mono: true) }
+                    if let path = package.installationPath { metadata(L("Location"), path, mono: true) }
+                    if let environment = package.environmentPath { metadata(L("Environment"), environment, mono: true) }
+                    metadata(package.source == .pip ? L("Interpreter") : L("Manager"), package.managerPath, mono: true)
                 }
                 if !package.executables.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Команды").font(.headline)
+                        Text(L("Commands")).font(.headline)
                         ForEach(package.executables, id: \.self) { command in
                             Text(command).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
                         }
@@ -49,7 +50,7 @@ struct PackageDetailView: View {
                 }
                 if !package.dependencies.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Зависимости · \(package.dependencies.count)").font(.headline)
+                        Text(L("Dependencies · \(package.dependencies.count)")).font(.headline)
                         Text(package.dependencies.joined(separator: ", "))
                             .font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
                     }
@@ -61,23 +62,28 @@ struct PackageDetailView: View {
                         Image(systemName: notice.isError ? "exclamationmark.circle" : "checkmark.circle")
                     }.font(.callout).foregroundStyle(notice.isError ? Color.orange : Color.secondary)
                 }
-                Button { showLog = true } label: { Label("Открыть журнал", systemImage: "terminal") }
+                Button { showLog = true } label: { Label(L("Open log"), systemImage: "terminal") }
                     .buttonStyle(.link)
             }
             .padding(30).frame(maxWidth: 640, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(.background)
-        .sheet(isPresented: $showLog) { LogView(log: model.coordinator.log) }
-        .alert("Удалить \(package.name)?", isPresented: $confirmDeletion) {
-            Button("Отмена", role: .cancel) {}
-            Button("Удалить", role: .destructive) {
+        .sheet(isPresented: $showLog) { LogView(log: model.coordinator.log, language: model.language) }
+        .alert(L("Remove \(package.name)?"), isPresented: $confirmDeletion) {
+            Button(L("Cancel"), role: .cancel) {}
+            Button(L("Remove"), role: .destructive) {
                 Task { await model.mutate(package.id, action: .uninstall) }
             }
         } message: {
-            Text("\(package.name) \(package.version)\nИсточник: \(package.source.title)\n" +
-                 (package.environmentPath.map { "Окружение: \($0)\n" } ?? "") +
-                 (package.source == .pip ? package.installationPath.map { "Расположение: \($0)\n" } ?? "" : "") + "\n" + removalExplanation)
+            Text(deletionMessage)
         }
+    }
+
+    private var deletionMessage: String {
+        let identity = L("\(package.name) \(package.version)\nSource: \(package.source.title)\n")
+        let environment = package.environmentPath.map { L("Environment: \($0)\n") } ?? ""
+        let location = package.source == .pip ? package.installationPath.map { L("Location: \($0)\n") } ?? "" : ""
+        return identity + environment + location + "\n" + removalExplanation
     }
 
     private var header: some View {
@@ -92,7 +98,7 @@ struct PackageDetailView: View {
                 Text(package.summary).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
             }
             if let homepage = package.homepage, let url = URL(string: homepage), ["https", "http"].contains(url.scheme) {
-                Link(destination: url) { Label("Сайт проекта", systemImage: "arrow.up.right.square") }.font(.caption)
+                Link(destination: url) { Label(L("Project website"), systemImage: "arrow.up.right.square") }.font(.caption)
             }
         }
     }
@@ -106,36 +112,36 @@ struct PackageDetailView: View {
                 Text("\(package.version) → \(latest)").font(.system(size: 12, design: .monospaced))
             }
             if package.source == .uv || package.source == .pipx {
-                Text("Проверка новой версии пока недоступна. «Обновить» запустит штатное обновление этого инструмента.")
+                Text(L("A separate version check is not available yet. Update runs the tool's native upgrade command."))
                     .font(.caption).foregroundStyle(.secondary)
             } else if package.updateStatus == .notChecked {
-                Text("Нажмите «Проверить обновления» на панели инструментов.")
+                Text(L("Click Check updates in the toolbar."))
                     .font(.caption).foregroundStyle(.secondary)
             } else if package.source == .homebrew && package.updateStatus == .unsupported {
-                Text("Свежесть каталога Homebrew не подтверждена. Отсутствие найденного обновления не означает, что версия последняя.")
+                Text(L("Homebrew catalog freshness is unverified. No detected update does not mean the installed version is latest."))
                     .font(.caption).foregroundStyle(.secondary)
             } else if package.source == .pip && package.updateStatus == .unsupported && package.upgradeRestriction == nil {
-                Text("Ответ индекса не подтвердил актуальность этой версии.")
+                Text(L("The index response did not confirm this version is current."))
                     .font(.caption).foregroundStyle(.secondary)
             }
             if package.source == .homebrew && package.updateStatus == .available {
-                Text("По локальному каталогу Homebrew. Если он устарел, доступная версия может быть новее указанной.")
+                Text(L("Based on the local Homebrew catalog. A newer version may exist if the catalog is stale."))
                     .font(.caption).foregroundStyle(.secondary)
             }
             if package.pinned {
-                Label("Версия закреплена в менеджере", systemImage: "pin.fill").font(.caption).foregroundStyle(.secondary)
+                Label(L("Pinned in the package manager"), systemImage: "pin.fill").font(.caption).foregroundStyle(.secondary)
             }
         }
     }
 
     private var removalExplanation: String {
         switch package.source {
-        case .homebrew: "Homebrew проверит зависимости перед удалением."
-        case .uv, .pipx: "Будет удалено окружение инструмента вместе с его зависимостями."
-        case .npm: "Будет удалена глобальная установка этого npm-пакета в выбранной установке Node.js."
-        case .go: "Один выбранный бинарник будет перемещён в Корзину. Go и кеш модулей останутся."
-        case .cargo: "Cargo удалит команды выбранного crate из указанного каталога установки. Rust и rustup останутся."
-        case .pip: "Будет удалён только этот Python-пакет. Окружение и остальные зависимости останутся."
+        case .homebrew: L("Homebrew will check dependencies before removal.")
+        case .uv, .pipx: L("The tool environment and its dependencies will be removed.")
+        case .npm: L("This global npm package will be removed from its Node.js installation.")
+        case .go: L("The selected binary will move to Trash. Go and its module cache remain.")
+        case .cargo: L("Cargo will remove this crate's commands from the specified installation root. Rust and rustup remain.")
+        case .pip: L("Only this Python distribution will be removed. The environment and other dependencies remain.")
         }
     }
 

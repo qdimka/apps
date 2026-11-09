@@ -25,7 +25,7 @@ public struct CargoManager: PackageManager {
                 let parts = line.split(separator: " ")
                 guard parts.count >= 2, Self.validName(String(parts[0])) else { continue }
                 rows.append(PackageRecord(name: String(parts[0]), source: .cargo, managerPath: executable.path, version: String(parts[1]).trimmingCharacters(in: CharacterSet(charactersIn: "v:")), kind: .cargoPackage,
-                    environmentPath: root.path, upgradeRestriction: "Старая запись Cargo: параметры установки неизвестны.", removalRestriction: "Старая запись Cargo: точный источник неизвестен.", identityScope: root.path + "|" + String(line)))
+                    environmentPath: root.path, upgradeRestriction: L("Legacy Cargo entry: build options are unknown."), removalRestriction: L("Legacy Cargo entry: the exact source is unknown."), identityScope: root.path + "|" + String(line)))
             }
             return rows
         }
@@ -51,12 +51,12 @@ public struct CargoManager: PackageManager {
             let options = ["features": features.joined(separator: ","), "all_features": String(all), "no_default_features": String(noDefault), "profile": profile, "target": target]
             rows.append(PackageRecord(name: name, source: .cargo, managerPath: executable.path, version: version, kind: .cargoPackage,
                 summary: origin, installationPath: root.appendingPathComponent("bin").path, executables: bins.sorted(), environmentPath: root.path,
-                upgradeRestriction: registry ? nil : "Git, локальные и сторонние registry требуют исходной команды установки Cargo.",
+                upgradeRestriction: registry ? nil : L("Git, local, and third-party registry installs require the original Cargo install command."),
                 installationKey: String(data: canonical, encoding: .utf8), identityScope: root.path + "|" + id, packageReference: spec, buildOptions: options))
         }
         let counts = Dictionary(grouping: rows, by: { $0.packageReference! }).mapValues(\.count)
         for i in rows.indices where counts[rows[i].packageReference!]! > 1 {
-            rows[i].removalRestriction = "Несколько установок соответствуют одному Cargo package ID. Удалите их через Cargo вручную."
+            rows[i].removalRestriction = L("Multiple installs match one Cargo package ID. Remove them manually with Cargo.")
             rows[i].upgradeRestriction = rows[i].removalRestriction
         }
         return rows.sorted { $0.name < $1.name }
@@ -81,7 +81,7 @@ public struct CargoManager: PackageManager {
             guard values.count >= 2, let new = SemanticVersion(String(values[1])), let old = SemanticVersion(row.version) else { throw ManagerError.invalidData("Cargo search") }
             return new > old ? String(values[1]) : nil
         }
-        throw ManagerError.invalidData("Cargo search: точный пакет не найден")
+        throw ManagerError.invalidData(L("Cargo search: exact package not found"))
     }
     public func checkUpdates() async throws -> [PackageRecord] {
         try await withOperationDeadline(checkTimeout) { try await checkedRows() }
@@ -104,7 +104,7 @@ public struct CargoManager: PackageManager {
     public func upgrade(_ package: PackageRecord) async throws -> CommandResult {
         let row = try await fresh(package)
         if let reason = row.upgradeRestriction { throw ManagerError.operationRestricted(reason) }
-        guard let version = try await latest(row) else { return .init(exitCode: 0, stdout: "Более новая версия не найдена.") }
+        guard let version = try await latest(row) else { return .init(exitCode: 0, stdout: L("No newer version found.")) }
         _ = try await fresh(row)
         var args = ["install", "--root", root.path, "--registry", "crates-io", "--locked", "--version", "=" + version, "--color", "never"]
         for bin in row.executables { args += ["--bin", bin] }

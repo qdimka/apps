@@ -1,8 +1,8 @@
 # Screenshot assets
 
-These are unedited window captures of apps 0.3.0, taken on macOS on November 8, 2026.
+These are unedited window captures of apps 0.4.0, taken on macOS on November 9, 2026.
 They show actual installed metadata; counts, versions, and paths are examples, not product guarantees.
-The application UI is currently Russian. Documentation captions and alternative text are English.
+The application UI is English by default; these captures use English. Russian remains available in Settings → Language.
 
 | File | View |
 | --- | --- |

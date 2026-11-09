@@ -48,12 +48,12 @@ public enum RuntimeDiscovery {
         return pythonURLs(paths: paths, home: home).first(where: isExecutable)
     }
 
-    public static func pythonChoices(searchPaths: [String]? = nil, home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [RuntimeChoice] {
+    public static func pythonChoices(searchPaths: [String]? = nil, home: URL = FileManager.default.homeDirectoryForCurrentUser, includeProjects: Bool = true) -> [RuntimeChoice] {
         let paths = searchPaths ?? ManagerDiscovery.defaultSearchPaths()
         var candidates: [URL] = []
         if let preferred = preferredPython(searchPaths: paths, home: home) { candidates.append(preferred) }
         candidates += pythonURLs(paths: paths, home: home)
-        candidates += projectPythons(home: home)
+        if includeProjects { candidates += projectPythons(home: home) }
         return unique(candidates, preserveVenv: true)
     }
 
@@ -104,7 +104,7 @@ public enum RuntimeDiscovery {
         let existing = unique(choices.map { URL(fileURLWithPath: $0.path) } + paths.filter { $0.hasPrefix("/") }.map { URL(fileURLWithPath: $0) }, preserveVenv: python)
         var result = existing
         for path in paths where path.hasPrefix("/") && !isExecutable(URL(fileURLWithPath: path)) && !result.contains(where: { $0.path == path }) {
-            result.append(RuntimeChoice(path: path, label: path + " (недоступен)"))
+            result.append(RuntimeChoice(path: path, label: path + L(" (unavailable)")))
         }
         return result
     }

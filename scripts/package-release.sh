@@ -26,6 +26,9 @@ built_version="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "
 test "$built_version" = "$version"
 test "$(lipo -archs "$app/Contents/MacOS/apps")" = "$architecture"
 test -x "$app/Contents/MacOS/apps"
+for language in en ru; do
+    test -f "$app/Contents/Resources/apps_AppsCore.bundle/$language.lproj/Localizable.strings"
+done
 plutil -lint "$app/Contents/Info.plist"
 codesign --verify --deep --strict "$app"
 archive="dist/apps-${tag}-macos-${architecture}.zip"

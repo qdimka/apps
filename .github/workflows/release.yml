@@ -62,6 +62,7 @@ jobs:
           cat > release-notes.md <<'NOTES'
           Native macOS CLI package manager. Requires macOS 14 or later.
 
+          - English is the default interface language; Russian is available in Settings → Language.
           - Apple Silicon: download the arm64 ZIP.
           - Intel: download the x86_64 ZIP.
           - SHA256SUMS contains checksums for both archives.

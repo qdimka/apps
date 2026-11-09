@@ -113,3 +113,18 @@ Release tags call the same workflow, then publish both ZIPs and checksums throug
 `scripts/package-release.sh` checks tag/plist/architecture/signature and packages with ditto.
 Only publication receives repository write access. See [release configuration](releases.md) before
 changing triggers, permissions, archive formats, or signing assumptions.
+
+## Localization
+
+AppsCore owns bundled English/Russian Localizable.strings and AppLocalization. English is the default
+for absent/unsupported preferences and the fallback for missing keys. L captures interpolation values
+separately from the translation key, so package names and paths remain data. AppModel persists the
+selected language; native UI labels redraw without manager I/O. The coordinator relocalizes cached
+application restrictions/status messages without changing IDs, checked versions, or update filters.
+External descriptions and raw command output are not translated. A few generated descriptions already
+stored in inventory change language only on the next refresh.
+
+Packaging embeds apps_AppsCore.bundle in Contents/Resources before signing and validates both catalogs.
+AppLocalization prefers this standalone resource path rather than relying on SwiftPM's build-directory
+fallback. Standard/saved inventory loads before optional project traversal; background discovery adds
+only newly found Python runtimes and preserves checked state in existing runtimes.

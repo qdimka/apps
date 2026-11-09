@@ -31,8 +31,8 @@ included minutes and can incur charges beyond its allowance. See [GitHub's runne
 5. Push a tag matching the app version, for example:
 
    ```sh
-   git tag v0.3.0
-   git push origin v0.3.0
+   git tag v0.4.0
+   git push origin v0.4.0
    ```
 
 Only stable tags of the form `vMAJOR.MINOR.PATCH` are accepted; leading zeros, prerelease suffixes,
@@ -41,11 +41,11 @@ does not need to rename its branch to main before adoption. Manual CI runs do no
 
 ## Release contents
 
-For `v0.3.0`, the release contains:
+For `v0.4.0`, the release contains:
 
 ```text
-apps-v0.3.0-macos-arm64.zip
-apps-v0.3.0-macos-x86_64.zip
+apps-v0.4.0-macos-arm64.zip
+apps-v0.4.0-macos-x86_64.zip
 SHA256SUMS
 ```
 
@@ -74,7 +74,7 @@ Adding notarization is a separate change requiring Apple Developer credentials.
 ```sh
 Tests/ReleaseChecks.sh
 scripts/test.sh
-scripts/package-release.sh v0.3.0
+scripts/package-release.sh v0.4.0
 ```
 
 The packaging script validates the version, builds the release app for the native host architecture,
@@ -89,8 +89,8 @@ preserves permissions regardless of artifact-service file handling.
 
 ## Verification limits
 
-Local checks can validate workflow syntax, native packaging, and checksums. An actual GitHub run,
-remote permissions, the Intel build, and publication remain unverified until a repository is added.
+Both architectures have completed CI successfully in qdimka/apps. Release publication is a separate
+tag-triggered run; inspect that run and the published release assets before claiming a version is released.
 The workflow uses the [official checkout action](https://github.com/actions/checkout),
 [setup-python](https://github.com/actions/setup-python),
 [upload-artifact](https://github.com/actions/upload-artifact),

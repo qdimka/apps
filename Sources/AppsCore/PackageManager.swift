@@ -4,10 +4,10 @@ public enum ManagerError: LocalizedError {
     case invalidData(String), invalidTarget, operationRestricted(String), contextChanged
     public var errorDescription: String? {
         switch self {
-        case let .invalidData(source): "Не удалось прочитать данные \(source). Возможно, формат этой версии менеджера не поддерживается."
-        case .invalidTarget: "Пакет не принадлежит выбранной установке менеджера или его имя недопустимо."
+        case let .invalidData(source): L("Could not read \(source) data. This manager version may use an unsupported format.")
+        case .invalidTarget: L("This package does not belong to the selected manager or its name is invalid.")
         case let .operationRestricted(reason): reason
-        case .contextChanged: "Пакет или окружение изменились. Обновите список перед повтором операции."
+        case .contextChanged: L("The package or environment changed. Refresh the list before trying again.")
         }
     }
 }

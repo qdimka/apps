@@ -31,7 +31,7 @@ public struct UVManager: PackageManager {
             }
             if let match = header.firstMatch(in: line, range: range), let name = capture(match, 1), let version = capture(match, 2) {
                 rows.append(PackageRecord(name: name, source: .uv, managerPath: executable.path, version: version,
-                                          summary: "Python-инструмент в отдельном окружении", installationPath: capture(match, 3)))
+                                          summary: L("Python tool in an isolated environment"), installationPath: capture(match, 3)))
             } else if let match = command.firstMatch(in: line, range: range), !rows.isEmpty, let name = capture(match, 1) {
                 rows[rows.count - 1].executables.append(capture(match, 2) ?? name)
             } else { throw ManagerError.invalidData("uv tools") }

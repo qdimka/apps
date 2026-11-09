@@ -14,7 +14,7 @@ public enum PackageSource: String, CaseIterable, Identifiable, Sendable, Codable
 public enum PackageKind: String, Sendable, Codable {
     case formula, cask, tool, npmPackage, pythonPackage, goTool, cargoPackage
     public var title: String {
-        switch self { case .formula: "CLI / библиотека"; case .cask: "Приложение"; case .tool: "Python CLI"; case .npmPackage: "npm · глобально"; case .pythonPackage: "Пакет Python"; case .goTool: "Go CLI"; case .cargoPackage: "Rust CLI" }
+        switch self { case .formula: L("CLI / library"); case .cask: L("Application"); case .tool: "Python CLI"; case .npmPackage: L("npm · global"); case .pythonPackage: L("Python package"); case .goTool: "Go CLI"; case .cargoPackage: "Rust CLI" }
     }
 }
 
@@ -22,10 +22,10 @@ public enum UpdateStatus: String, Sendable, Codable {
     case notChecked, available, current, unsupported
     public var title: String {
         switch self {
-        case .notChecked: "Не проверено"
-        case .available: "Доступно обновление"
-        case .current: "Обновление не найдено"
-        case .unsupported: "Версия не проверена"
+        case .notChecked: L("Not checked")
+        case .available: L("Update available")
+        case .current: L("No update found")
+        case .unsupported: L("Version unverified")
         }
     }
 }

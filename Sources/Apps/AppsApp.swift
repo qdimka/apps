@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AppsCore
 
 @main @MainActor
 struct AppsApp: App {
@@ -8,6 +9,7 @@ struct AppsApp: App {
     var body: some Scene {
         Window("apps", id: "main") {
             ContentView(model: model)
+                .environment(\.locale, Locale(identifier: model.language.rawValue))
                 .frame(minWidth: 1000, minHeight: 640)
         }
         .windowStyle(.titleBar)

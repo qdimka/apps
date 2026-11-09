@@ -8,38 +8,45 @@ struct SourceSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack {
-                Label("Источники пакетов", systemImage: "slider.horizontal.3").font(.title2.bold())
+                Label(L("Settings"), systemImage: "slider.horizontal.3").font(.title2.bold())
                 Spacer()
-                Button("Готово") { dismiss() }.keyboardShortcut(.defaultAction)
+                Button(L("Done")) { dismiss() }.keyboardShortcut(.defaultAction)
             }
             Form {
                 Section {
-                    Text("Установок Node.js: \(model.npmChoices.count)")
-                    Text("Все установки показаны вместе. Фильтр над списком скрывает ненужные окружения.").font(.caption).foregroundStyle(.secondary)
-                    Button("Добавить установку Node.js…") { model.chooseRuntime(.npm) }
-                } header: { Text("npm · глобальные пакеты") }
-                Section {
-                    Text("Python-окружений: \(model.pythonChoices.count)")
-                    Button("Добавить Python или venv…") { model.chooseRuntime(.pip) }
-                    Text("Основные Python и найденные venv показаны вместе. Добавьте окружение, если оно находится вне стандартных каталогов проектов.")
+                    Picker(L("Language"), selection: $model.language) {
+                        ForEach(AppLanguage.allCases) { language in Text(language.nativeName).tag(language) }
+                    }
+                    Text(L("English is the default. Your language choice is saved."))
                         .font(.caption).foregroundStyle(.secondary)
-                } header: { Text("pip · окружение Python") }
+                } header: { Text(L("General")) }
+                Section {
+                    Text(L("Node.js installations: \(model.npmChoices.count)"))
+                    Text(L("All installations are shown together. Use the filter above the list to narrow environments.")).font(.caption).foregroundStyle(.secondary)
+                    Button(L("Add Node.js installation…")) { model.chooseRuntime(.npm) }
+                } header: { Text(L("npm · global packages")) }
+                Section {
+                    Text(L("Python environments: \(model.pythonChoices.count)"))
+                    Button(L("Add Python or venv…")) { model.chooseRuntime(.pip) }
+                    Text(L("Main Python installations and discovered venvs are shown together. Add an environment outside the standard project folders."))
+                        .font(.caption).foregroundStyle(.secondary)
+                } header: { Text(L("pip · Python environments")) }
                 Section {
                     Text(model.cargoRoot).font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
-                    Button("Выбрать каталог Cargo…") { model.chooseCargoRoot() }
-                    Text("Установленные CLI из cargo install. Выберите другой каталог, если используете --root или install.root.")
+                    Button(L("Choose Cargo directory…")) { model.chooseCargoRoot() }
+                    Text(L("CLI tools installed with cargo install. Choose another directory if you use --root or install.root."))
                         .font(.caption).foregroundStyle(.secondary)
                 } header: { Text("Rust · Cargo") }
             }
             .formStyle(.grouped)
             .disabled(model.coordinator.isBusy)
-            Button("Найти окружения и обновить список") { Task { await model.reload() } }.disabled(model.coordinator.isBusy)
+            Button(L("Find environments and refresh")) { Task { await model.reload() } }.disabled(model.coordinator.isBusy)
             if let error = model.settingsError { Text(error).font(.callout).foregroundStyle(.orange) }
             if model.coordinator.isBusy {
-                HStack { ProgressView().controlSize(.small); Text(model.coordinator.activity ?? "Загрузка…").font(.caption).foregroundStyle(.secondary) }
+                HStack { ProgressView().controlSize(.small); Text(model.coordinator.activity ?? L("Loading…")).font(.caption).foregroundStyle(.secondary) }
             }
         }
-        .padding(24).frame(width: 720, height: 620)
+        .padding(24).frame(width: 720, height: 700)
     }
 
 }

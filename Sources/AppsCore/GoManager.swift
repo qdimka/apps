@@ -24,7 +24,7 @@ public struct GoManager: PackageManager {
         return try Self.parseInfo(text, binary: binary, executable: executable, root: root, fingerprint: before, owned: ManagedFiles.owned(binary))
     }
     public func list() async throws -> [PackageRecord] {
-        guard try await boundedOutput(["help", "version"]).contains("-json") else { throw ManagerError.invalidData("Go: нужен Go 1.25+ с JSON build-info") }
+        guard try await boundedOutput(["help", "version"]).contains("-json") else { throw ManagerError.invalidData(L("Go: Go 1.25+ with JSON build info is required")) }
         let root = try await root()
         guard FileManager.default.fileExists(atPath: root.path) else { return [] }
         let files = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil).sorted { $0.path < $1.path }
@@ -39,7 +39,7 @@ public struct GoManager: PackageManager {
         return rows
     }
     public static func parseInfo(_ text: String, binary: URL, executable: URL, root: URL, fingerprint: String, owned: Bool) throws -> PackageRecord {
-        let json = try jsonObject(text, source: "Go (нужен Go 1.25+)")
+        let json = try jsonObject(text, source: L("Go (requires Go 1.25+)"))
         guard let path = json["Path"] as? String, let main = json["Main"] as? [String: Any],
               let module = main["Path"] as? String, let version = main["Version"] as? String,
               validPath(path), validPath(module) else { throw ManagerError.invalidData("Go build info") }
@@ -53,8 +53,8 @@ public struct GoManager: PackageManager {
             return true
         }
         let replaced = main["Replace"] != nil || (json["Deps"] as? [[String: Any]] ?? []).contains { $0["Replace"] != nil }
-        let reason: String? = !owned ? "Бинарник принадлежит другому пользователю." :
-            (SemanticVersion(version) == nil || replaced || custom ? "Локальная или особая сборка: обновите её исходной командой Go." : nil)
+        let reason: String? = !owned ? L("This binary belongs to another user.") :
+            (SemanticVersion(version) == nil || replaced || custom ? L("Local or custom build: update it with the original Go command.") : nil)
         return PackageRecord(name: binary.lastPathComponent, source: .go, managerPath: executable.path, version: version,
             kind: .goTool, summary: path, installationPath: binary.path, executables: [binary.lastPathComponent],
             dependencies: (json["Deps"] as? [[String: Any]] ?? []).compactMap { d in (d["Path"] as? String).map { $0 + " " + (d["Version"] as? String ?? "") } },
@@ -94,12 +94,12 @@ public struct GoManager: PackageManager {
         let row = try await fresh(package)
         if let reason = row.removalRestriction { throw ManagerError.operationRestricted(reason) }
         try trash.trash(URL(fileURLWithPath: row.installationPath!))
-        return .init(exitCode: 0, stdout: "Перемещён в Корзину: " + row.installationPath!)
+        return .init(exitCode: 0, stdout: L("Moved to Trash: ") + row.installationPath!)
     }
     public func upgrade(_ package: PackageRecord) async throws -> CommandResult {
         let row = try await fresh(package)
         if let reason = row.upgradeRestriction { throw ManagerError.operationRestricted(reason) }
-        guard let version = try await latest(row) else { return .init(exitCode: 0, stdout: "Более новая версия не найдена.") }
+        guard let version = try await latest(row) else { return .init(exitCode: 0, stdout: L("No newer version found.")) }
         let target = URL(fileURLWithPath: row.installationPath!), root = URL(fileURLWithPath: row.environmentPath!)
         let stage = root.appendingPathComponent(".apps-go-stage-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: stage, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])

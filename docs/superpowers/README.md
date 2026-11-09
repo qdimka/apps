@@ -12,5 +12,7 @@ as agent instructions. For current behavior, read [architecture.md](../architect
 | [Go and Rust](specs/2026-11-08-go-rust-list-design.md) | [Go/Cargo implementation](plans/2026-11-08-go-rust-list.md) | Adapters shipped in 0.3; removal of the sidebar was superseded by user clarification |
 | [Environment inventory](specs/2026-11-08-environment-inventory-design.md) | [Environment implementation](plans/2026-11-08-environment-inventory.md) | Current navigation and multi-runtime behavior, shipped in 0.3 |
 
+| [English-first interface](specs/2026-11-08-localization-release-design.md) | [Localization and release](plans/2026-11-08-localization-release.md) | English default, saved Russian option, standalone catalogs, published ZIPs |
+
 Historical verification is recorded in [validation.md](../validation.md). Old commands and
 proposals are historical context; use root agent instructions for current verification commands.

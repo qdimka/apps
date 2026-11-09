@@ -19,9 +19,9 @@ public enum CommandError: LocalizedError, Equatable {
     case timedOut, outputTooLarge, failed(Int32, String)
     public var errorDescription: String? {
         switch self {
-        case .timedOut: "Команда превысила время ожидания. Проверьте состояние менеджера перед повтором."
-        case .outputTooLarge: "Вывод команды превышает 32 МБ."
-        case let .failed(code, output): "Команда завершилась с кодом \(code).\n\(output.suffix(4000))"
+        case .timedOut: L("The command timed out. Check the manager state before trying again.")
+        case .outputTooLarge: L("Command output exceeds 32 MB.")
+        case let .failed(code, output): L("The command exited with code \(code).\n\(output.suffix(4000))")
         }
     }
 }

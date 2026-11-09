@@ -30,7 +30,7 @@ public struct PipManager: PackageManager {
         }
         let text = try result.requireSuccess()
         guard result.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw ManagerError.operationRestricted("Проверка индекса pip завершилась с предупреждением.\n" + result.stderr.suffix(3500))
+            throw ManagerError.operationRestricted(L("The pip index check returned a warning.\n") + result.stderr.suffix(3500))
         }
         guard let entries = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [[String: Any]] else { throw ManagerError.invalidData("pip outdated") }
         var latest: [String: String] = [:]
@@ -71,7 +71,7 @@ public struct PipManager: PackageManager {
                 for row in protected {
                     guard row.name.range(of: #"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$"#, options: .regularExpression) != nil,
                           row.version.range(of: #"^[A-Za-z0-9.!+_-]+$"#, options: .regularExpression) != nil else {
-                        throw ManagerError.operationRestricted("Не удалось закрепить версии защищённых зависимостей. Обновите пакет в исходном менеджере.")
+                        throw ManagerError.operationRestricted(L("Could not pin protected dependency versions. Update this package with its original manager."))
                     }
                     lines.append(Self.normalized(row.name) + "===" + row.version)
                 }
@@ -91,7 +91,7 @@ public struct PipManager: PackageManager {
         let text = try await output(["-c", Self.configurationGuardScript])
         guard let keys = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String] else { throw ManagerError.invalidData("pip configuration") }
         if !keys.isEmpty {
-            throw ManagerError.operationRestricted("Настройки pip меняют цель или область операции: " + keys.joined(separator: ", ") + ". Используйте исходную настройку в Terminal или уберите эти параметры.")
+            throw ManagerError.operationRestricted(L("Pip settings change the operation target or scope: ") + keys.joined(separator: ", ") + L(". Use the original configuration in Terminal or remove these options."))
         }
     }
 
@@ -118,20 +118,20 @@ public struct PipManager: PackageManager {
             let direct = item["directURL"] as? Bool ?? false
             let local = within(location, prefix)
             let restriction: String?
-            if !pip { restriction = "В выбранном Python нет pip. Пакеты доступны для просмотра." }
-            else if external { restriction = "Окружением управляет внешний менеджер (EXTERNALLY-MANAGED)." }
-            else if prefix != base && !local { restriction = "Пакет доступен из другого окружения. Выберите исходный Python для его изменения." }
-            else if system && !user { restriction = "Пакет системного Python. Изменение через apps отключено." }
-            else if !local && !user { restriction = "Пакет расположен за пределами выбранного окружения." }
+            if !pip { restriction = L("This Python has no pip. Packages are available for inspection only.") }
+            else if external { restriction = L("An external manager owns this environment (EXTERNALLY-MANAGED).") }
+            else if prefix != base && !local { restriction = L("This package comes from another environment. Use its original Python to modify it.") }
+            else if system && !user { restriction = L("System Python package. Changes through apps are disabled.") }
+            else if !local && !user { restriction = L("This package is outside the selected environment.") }
             else if !["pip", "uv"].contains(installer) {
-                restriction = installer == "conda" ? "Пакетом управляет conda. Изменяйте его через conda." : "Владелец установки не подтверждён как pip или uv."
+                restriction = installer == "conda" ? L("Conda owns this package. Manage it with conda.") : L("Installation ownership could not be confirmed as pip or uv.")
             } else { restriction = nil }
             rows.append(PackageRecord(name: name, source: .pip, managerPath: executable.path, version: version,
                 kind: .pythonPackage, summary: String((item["summary"] as? String ?? "").prefix(1000)), installationPath: location,
                 executables: item["commands"] as? [String] ?? [], dependencies: item["dependencies"] as? [String] ?? [],
                 homepage: item["homepage"] as? String, environmentPath: prefix,
-                upgradeRestriction: restriction ?? (direct ? "Пакет установлен из URL или локального проекта. Обновите исходную установку." : nil),
-                removalRestriction: restriction ?? (normalized(name) == "pip" ? "Удаление pip отключено, чтобы сохранить управление окружением." : nil), isUserInstall: user,
+                upgradeRestriction: restriction ?? (direct ? L("This package was installed from a URL or local project. Update the original installation.") : nil),
+                removalRestriction: restriction ?? (normalized(name) == "pip" ? L("Removing pip is disabled to preserve environment management.") : nil), isUserInstall: user,
                 installationKey: item["metadataLocation"] as? String ?? "\(location)|\(normalized(name))|\(version)|\(user)"))
         }
         return rows

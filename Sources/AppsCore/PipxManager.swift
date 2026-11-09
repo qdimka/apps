@@ -36,7 +36,7 @@ public struct PipxManager: PackageManager {
             let resolved = apps.map { name in appPaths.first { URL(fileURLWithPath: $0).lastPathComponent == name } ?? name }
             let location = (metadata["venv_dir"].flatMap(path)) ?? venvRoot.flatMap { $0.isEmpty ? nil : $0 + "/" + name }
             return PackageRecord(name: name, source: .pipx, managerPath: executable.path, version: version,
-                summary: "Python-инструмент в отдельном окружении", installationPath: location,
+                summary: L("Python tool in an isolated environment"), installationPath: location,
                 executables: resolved, pinned: main["pinned"] as? Bool ?? false)
         }
     }

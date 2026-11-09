@@ -84,7 +84,9 @@ paid service, or third-party Swift dependency. Target macOS 14+ and Swift 6.
 - For behavior changes, add meaningful regression coverage and run the applicable suite.
 - For UI changes, build and inspect the actual native window when accessible; preserve
   standard macOS controls and do not add duplicate custom traffic-light buttons.
-- Keep all repository documentation in English. This does not implicitly request UI localization.
+- Keep all repository documentation in English. UI copy belongs in both English/Russian catalogs;
+  English is the default. For localization changes, verify resource embedding and preserve checked
+  inventory/selection when switching languages without manager I/O.
 - Update the relevant contract documentation when behavior or commands change.
 - Check `git diff --check` and local documentation links before finishing documentation work.
 - State what changed, what was checked, and any remaining limitation. Do not claim

@@ -30,6 +30,7 @@ actor FakeManager: PackageManager {
         if failChecks { throw CommandError.failed(1, "check unavailable") }
         return try await list().map { row in var row = row; row.updateStatus = .current; row.latestVersion = row.version; return row }
     }
+    func setAvailableUpdate() { rows[0].updateStatus = .available; rows[0].latestVersion = "2"; rows[0].upgradeRestriction = L("This package is pinned. Unpin it in its manager first.", language: .english) }
     func setCheckFailure() { failChecks = true }
     func setRefreshFailure() { failAfterMutation = true }
     func setRestrictions() { rows[0].upgradeRestriction = "Another manager owns this package"; rows[0].removalRestriction = "Another manager owns this package" }

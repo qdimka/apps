@@ -16,7 +16,7 @@ Built with SwiftUI for macOS 14+. Runs locally, with no account, server, analyti
 - Update or uninstall one installation, with confirmation before removal and an operation log.
 - Add a Python interpreter, project venv, Node.js installation, or custom Cargo installation root.
 
-The current application interface is in Russian; this documentation is in English. Screenshots show the actual app, without translating or replacing its interface. The sharing indicator in the upper-left corner is added by macOS during window capture; apps uses standard native window controls.
+The interface defaults to English. Choose **Settings → Language → English / Russian** to change it; the preference is saved. Screenshots show the actual English interface. The sharing indicator in the upper-left corner is added by macOS during window capture; apps uses standard native window controls.
 
 ## Supported sources
 
@@ -32,10 +32,14 @@ The current application interface is in Russian; this documentation is in Englis
 
 Go inventory requires Go 1.25+ for JSON build information. Python inventory requires Python 3.8+ and uses the standard library even when pip is absent. Each source needs its existing manager; apps does not install managers.
 
+## Downloads
+
+Download the ZIP for your Mac from [GitHub Releases](https://github.com/qdimka/apps/releases/latest): **arm64** for Apple Silicon or **x86_64** for Intel. Each release includes SHA256SUMS. Builds are ad hoc signed; see the signing limits below.
+
 ## GitHub Actions and releases
 
 CI builds and checks Apple Silicon and Intel app bundles on branch pushes and pull requests.
-Pushing a matching version tag such as `v0.3.0` publishes both app ZIPs and SHA256SUMS to
+Pushing a matching version tag such as `v0.4.0` publishes both app ZIPs and SHA256SUMS to
 GitHub Releases after both builds pass. No Apple credentials are required for the ad hoc signed
 bundles. See [CI setup, release steps, and signing limits](docs/releases.md).
 
@@ -72,7 +76,7 @@ npm discovery includes PATH and nvm installations. Python discovery includes sta
 ~/.virtualenvs             ~/.local/share/virtualenvs    ~/.pyenv/versions
 ```
 
-Project discovery stops at depth 5, 2,500 visited entries, or 150 environments. Dependency trees and directory symlinks are skipped. Use the source settings button in the toolbar to add installations outside those locations. A refresh discovers new environments; saved unavailable environments report their own error while healthy environments remain usable.
+Standard and saved environments load first. Project discovery runs separately in the background and caches its results; new environments are added without clearing previous update checks. It stops at depth 5, 2,500 visited entries, or 150 environments. Dependency trees and directory symlinks are skipped. Use the source settings button in the toolbar to add installations outside those locations. A refresh discovers new environments; saved unavailable environments report their own error while healthy environments remain usable.
 
 ![A project venv selected in the environment filter, with the wasmtime distribution and its exact interpreter](docs/assets/python-venv.jpg)
 

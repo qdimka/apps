@@ -47,6 +47,7 @@ enum EnvironmentChecks {
                 try Data("home = /base".utf8).write(to: env.appendingPathComponent("pyvenv.cfg"))
                 try FileManager.default.createSymbolicLink(at: env.appendingPathComponent("bin/python"), withDestinationURL: base)
             }
+            try expectEqual(RuntimeDiscovery.pythonChoices(searchPaths: [], home: home, includeProjects: false).count, 0)
             let choices = RuntimeDiscovery.pythonChoices(searchPaths: [], home: home)
             try expectEqual(choices.count, 2)
             try expect(choices.contains { $0.path.contains("/a/.venv/") })

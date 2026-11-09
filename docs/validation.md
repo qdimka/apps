@@ -125,3 +125,21 @@ flat/grouped schemas reproduced the failure; normalization now supports both and
 shapes. Local suites pass 93 checks on pip 26.3 and on the legacy system pip. No user-installed
 packages were changed; pip compatibility installs used a disposable temporary environment.
 Remote runs and build artifacts are available in [Actions](https://github.com/qdimka/apps/actions).
+
+## apps 0.4.0 release candidate
+
+English/Russian catalogs, shared interpolation helper, saved language setting, standalone resource
+embedding, and background-discovery isolation are included in this candidate.
+
+- `scripts/test.sh`: 98 checks, 0 failures. Added English default/fallback, Russian translation,
+  placeholder parity, safe interpolation, and state-preserving language/background transitions.
+- `scripts/package-release.sh v0.4.0`: arm64 ZIP integrity, plist/version, executable architecture,
+  both embedded catalogs, and strict signature validation passed. Extracted-bundle resource/signature
+  checks also passed without modifying user-installed packages.
+- Native inspection confirmed English default (including menus), Russian/English switching without
+  inventory reload, environment filter, package details, and asynchronous project-venv additions.
+  Three documentation screenshots were refreshed in English.
+- Independent review caught and drove fixes for language-triggered and background-triggered resets
+  of checked state. Regression tests preserve visible selected IDs and manager call counts.
+- Minor accepted limit: cached generated tool descriptions can retain their prior language until
+  inventory refresh. External descriptions and raw logs intentionally retain their original text.
